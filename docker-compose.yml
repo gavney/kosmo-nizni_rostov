@@ -5,6 +5,7 @@ services:
       dockerfile: backend/Dockerfile
     expose:
       - "8000"
+    restart: unless-stopped
 
   frontend:
     build:
@@ -14,3 +15,4 @@ services:
       - "8080:80"
     depends_on:
       - backend
+    restart: unless-stopped
