@@ -82,6 +82,50 @@ export function loadVariant(id: string) {
   return request<VariantInfo>(`/api/variants/${id}`);
 }
 
+export function patchLaunchStage(scenario: Scenario, launch_stage: number) {
+  return request<Scenario>("/api/scenarios/launch-stage", {
+    method: "POST",
+    body: JSON.stringify({ scenario, launch_stage }),
+  });
+}
+
+export function patchPlane(
+  scenario: Scenario,
+  plane_id: string,
+  patch: { raan_deg?: number; phase_deg?: number },
+) {
+  return request<Scenario>("/api/scenarios/plane", {
+    method: "POST",
+    body: JSON.stringify({ scenario, plane_id, ...patch }),
+  });
+}
+
+export function patchFailure(
+  scenario: Scenario,
+  satellite_id: string,
+  start_s: number,
+  end_s: number,
+  clear = false,
+) {
+  return request<Scenario>("/api/scenarios/failure", {
+    method: "POST",
+    body: JSON.stringify({ scenario, satellite_id, start_s, end_s, clear }),
+  });
+}
+
+export function patchGatewayOutage(
+  scenario: Scenario,
+  gateway_id: string,
+  start_s: number,
+  end_s: number,
+  clear = false,
+) {
+  return request<Scenario>("/api/scenarios/gateway-outage", {
+    method: "POST",
+    body: JSON.stringify({ scenario, gateway_id, start_s, end_s, clear }),
+  });
+}
+
 export function compareScenarios(
   left: Scenario,
   right: Scenario,

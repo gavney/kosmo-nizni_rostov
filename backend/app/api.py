@@ -115,3 +115,95 @@ def get_export(sim_id: str) -> dict:
     if sim is None:
         raise HTTPException(status_code=404, detail="Simulation not found")
     return export_simulation(sim)
+
+
+class LaunchStageBody(BaseModel):
+    scenario: dict
+    launch_stage: int
+
+
+class PlaneBody(BaseModel):
+    scenario: dict
+    plane_id: str
+    raan_deg: float | None = None
+    phase_deg: float | None = None
+
+
+class FailureBody(BaseModel):
+    scenario: dict
+    satellite_id: str
+    start_s: float
+    end_s: float
+    clear: bool = False
+
+
+class GatewayOutageBody(BaseModel):
+    scenario: dict
+    gateway_id: str
+    start_s: float
+    end_s: float
+    clear: bool = False
+
+
+@router.post("/scenarios/launch-stage")
+def post_launch_stage(body: LaunchStageBody) -> dict:
+    from .mutate import set_launch_stage
+
+    try:
+        scenario = set_launch_stage(body.scenario, body.launch_stage)
+        check = validate_payload(scenario)
+        if not check["ok"]:
+            raise ValueError(check["error"])
+        return scenario
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/scenarios/plane")
+def post_plane(body: PlaneBody) -> dict:
+    from .mutate import set_plane_angles
+
+    try:
+        scenario = set_plane_angles(body.scenario, body.plane_id, body.raan_deg, body.phase_deg)
+        check = validate_payload(scenario)
+        if not check["ok"]:
+            raise ValueError(check["error"])
+        return scenario
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/scenarios/failure")
+def post_failure(body: FailureBody) -> dict:
+    from .mutate import clear_failure, upsert_failure
+
+    try:
+        scenario = (
+            clear_failure(body.scenario, body.satellite_id)
+            if body.clear
+            else upsert_failure(body.scenario, body.satellite_id, body.start_s, body.end_s)
+        )
+        check = validate_payload(scenario)
+        if not check["ok"]:
+            raise ValueError(check["error"])
+        return scenario
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/scenarios/gateway-outage")
+def post_gateway_outage(body: GatewayOutageBody) -> dict:
+    from .mutate import clear_gateway_outage, upsert_gateway_outage
+
+    try:
+        scenario = (
+            clear_gateway_outage(body.scenario, body.gateway_id)
+            if body.clear
+            else upsert_gateway_outage(body.scenario, body.gateway_id, body.start_s, body.end_s)
+        )
+        check = validate_payload(scenario)
+        if not check["ok"]:
+            raise ValueError(check["error"])
+        return scenario
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

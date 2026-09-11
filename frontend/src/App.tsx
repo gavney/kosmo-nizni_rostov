@@ -14,6 +14,9 @@ import {
   listFixtures,
   listVariants,
   loadVariant,
+  patchFailure,
+  patchGatewayOutage,
+  patchLaunchStage,
   saveVariant,
   simulate as runSimulate,
   snapshot as fetchSnapshot,
@@ -231,9 +234,7 @@ export default function App() {
             onLoadFixture={(id) => void onLoadFixture(id)}
             onUpload={(file) => void onUpload(file)}
             onStage={(stage) => {
-              const next = cloneScenario(scenario);
-              next.design.launch_stage = stage;
-              void loadSim(next);
+              void patchLaunchStage(scenario, stage).then((next) => loadSim(next));
             }}
             onPlane={(id, key, value) => {
               const next = cloneScenario(scenario);
@@ -282,16 +283,11 @@ export default function App() {
             onEnd={setFailEnd}
             onFail={() => {
               if (!selectedSat) return;
-              const next = cloneScenario(scenario);
-              next.failures = next.failures.filter((f) => f.satellite_id !== selectedSat);
-              next.failures.push({ satellite_id: selectedSat, start_s: failStart, end_s: failEnd });
-              void loadSim(next);
+              void patchFailure(scenario, selectedSat, failStart, failEnd).then((next) => loadSim(next));
             }}
             onClear={() => {
               if (!selectedSat) return;
-              const next = cloneScenario(scenario);
-              next.failures = next.failures.filter((f) => f.satellite_id !== selectedSat);
-              void loadSim(next);
+              void patchFailure(scenario, selectedSat, failStart, failEnd, true).then((next) => loadSim(next));
             }}
           />
         )}
@@ -307,15 +303,10 @@ export default function App() {
             onStart={setFailStart}
             onEnd={setFailEnd}
             onOutage={(gatewayId) => {
-              const next = cloneScenario(scenario);
-              next.gateway_outages = next.gateway_outages.filter((f) => f.gateway_id !== gatewayId);
-              next.gateway_outages.push({ gateway_id: gatewayId, start_s: failStart, end_s: failEnd });
-              void loadSim(next);
+              void patchGatewayOutage(scenario, gatewayId, failStart, failEnd).then((next) => loadSim(next));
             }}
             onClear={(gatewayId) => {
-              const next = cloneScenario(scenario);
-              next.gateway_outages = next.gateway_outages.filter((f) => f.gateway_id !== gatewayId);
-              void loadSim(next);
+              void patchGatewayOutage(scenario, gatewayId, failStart, failEnd, true).then((next) => loadSim(next));
             }}
           />
         )}
