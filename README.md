@@ -4,7 +4,7 @@
 
 **Деплой:** https://polar-mesh.duckdns.org/
 
-![Polar Mesh — интерфейс](docs/polar-mesh-ui.jpg)
+![Polar Mesh — интерфейс](docs/polar-mesh-ui.png)
 
 ## Результаты по доступности
 
