@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from .engine import simulate
+from .engine import BusyError, simulate
 from .variants import (
     compare_ids,
     compare_sims,
@@ -16,6 +16,13 @@ from .variants import (
 
 router = APIRouter(tags=["variants"])
 
+
+def _busy(exc: BusyError) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail=str(exc),
+        headers={"Retry-After": "5"},
+    )
 
 class SaveBody(BaseModel):
     name: str
@@ -40,6 +47,8 @@ class CompareScenariosBody(BaseModel):
 def post_variant(body: SaveBody) -> dict:
     try:
         return save_variant(body.name, body.scenario, mode=body.mode)
+    except BusyError as exc:
+        raise _busy(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -72,6 +81,8 @@ def post_compare(body: CompareScenariosBody) -> dict:
         left = simulate(body.left, mode=body.mode)
         right = simulate(body.right, mode=body.mode)
         return compare_sims(left, right, body.left_name, body.right_name)
+    except BusyError as exc:
+        raise _busy(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -80,5 +91,7 @@ def post_compare(body: CompareScenariosBody) -> dict:
 def post_compare_ids(body: CompareIdsBody) -> dict:
     try:
         return compare_ids(body.left_id, body.right_id)
+    except BusyError as exc:
+        raise _busy(exc) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

@@ -189,7 +189,7 @@ export default function App() {
   useEffect(() => {
     if (!playing || !sim) return;
     // Slower scrub on weak VPS — each tick hits /snapshot.
-    const interval = Math.max(180, Math.round(320 / speed));
+    const interval = Math.max(140, Math.round(240 / speed));
     const id = window.setInterval(() => {
       setIndex((prev) => (prev + 1) % sim.times.length);
     }, interval);
@@ -201,7 +201,7 @@ export default function App() {
     if (debounce.current) window.clearTimeout(debounce.current);
     debounce.current = window.setTimeout(() => {
       void loadSim(next);
-    }, 1200);
+    }, 700);
   };
 
   const onUpload = async (file: File) => {
@@ -286,7 +286,7 @@ export default function App() {
         connected={Boolean(route?.path.length)}
         followedId={followedSat}
         playing={playing}
-        blendSec={playing ? Math.max(0.22, Math.round(320 / speed) / 1000) : 0.2}
+        blendSec={playing ? Math.max(0.18, Math.round(240 / speed) / 1000) : 0.18}
         onSatPick={pickSatellite}
       />
       {!route?.path.length && (

@@ -1,6 +1,6 @@
 import type { CompareResult, Scenario, Simulation, Snapshot, VariantInfo } from "./types";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, retries = 0): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: {
@@ -8,6 +8,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
+  if (response.status === 503 && retries > 0) {
+    const wait = Number(response.headers.get("Retry-After") ?? "3") * 1000;
+    await new Promise((resolve) => window.setTimeout(resolve, Math.min(8000, wait || 3000)));
+    return request<T>(path, init, retries - 1);
+  }
   if (!response.ok) {
     let detail = response.statusText;
     try {
@@ -16,7 +21,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* ignore */
     }
-    throw new Error(detail);
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return response.json() as Promise<T>;
 }
@@ -37,10 +42,14 @@ export function validateScenario(scenario: Scenario) {
 }
 
 export function simulate(scenario: Scenario, mode = "bfs") {
-  return request<Simulation>("/api/simulate", {
-    method: "POST",
-    body: JSON.stringify({ scenario, mode }),
-  });
+  return request<Simulation>(
+    "/api/simulate",
+    {
+      method: "POST",
+      body: JSON.stringify({ scenario, mode }),
+    },
+    3,
+  );
 }
 
 export function snapshot(
@@ -62,17 +71,25 @@ export function snapshot(
 }
 
 export function exportResult(scenario: Scenario, mode = "bfs") {
-  return request<unknown>("/api/export", {
-    method: "POST",
-    body: JSON.stringify({ scenario, mode }),
-  });
+  return request<unknown>(
+    "/api/export",
+    {
+      method: "POST",
+      body: JSON.stringify({ scenario, mode }),
+    },
+    3,
+  );
 }
 
 export function saveVariant(name: string, scenario: Scenario, mode = "bfs") {
-  return request<VariantInfo>("/api/variants", {
-    method: "POST",
-    body: JSON.stringify({ name, scenario, mode }),
-  });
+  return request<VariantInfo>(
+    "/api/variants",
+    {
+      method: "POST",
+      body: JSON.stringify({ name, scenario, mode }),
+    },
+    3,
+  );
 }
 
 export function listVariants() {
@@ -134,8 +151,12 @@ export function compareScenarios(
   right_name: string,
   mode = "bfs",
 ) {
-  return request<CompareResult>("/api/compare", {
-    method: "POST",
-    body: JSON.stringify({ left, right, left_name, right_name, mode }),
-  });
+  return request<CompareResult>(
+    "/api/compare",
+    {
+      method: "POST",
+      body: JSON.stringify({ left, right, left_name, right_name, mode }),
+    },
+    3,
+  );
 }

@@ -3,12 +3,19 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from .engine import export_simulation, get_sim, simulate, snapshot_at
+from .engine import BusyError, export_simulation, get_sim, simulate, snapshot_at
 from .routing import find_route
 from .scenario import validate_payload
 
 router = APIRouter(tags=["calc"])
 
+
+def _busy(exc: BusyError) -> HTTPException:
+    return HTTPException(
+        status_code=503,
+        detail=str(exc),
+        headers={"Retry-After": "5"},
+    )
 
 class ScenarioBody(BaseModel):
     scenario: dict
@@ -74,6 +81,8 @@ def post_route(body: ScenarioBody) -> dict:
 def post_simulate(body: SimulateBody) -> dict:
     try:
         sim = simulate(body.scenario, mode=body.mode)
+    except BusyError as exc:
+        raise _busy(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {
@@ -104,6 +113,8 @@ def get_simulation(sim_id: str) -> dict:
 def post_export(body: SimulateBody) -> dict:
     try:
         sim = simulate(body.scenario, mode=body.mode)
+    except BusyError as exc:
+        raise _busy(exc) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return export_simulation(sim)

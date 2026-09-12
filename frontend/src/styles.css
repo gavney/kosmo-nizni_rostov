@@ -266,7 +266,7 @@ button { cursor: pointer; }
   width: 352px;
   bottom: 12px;
   overflow: auto;
-  padding: 22px 18px 18px;
+  padding: 22px 20px 28px;
   border-radius: 16px;
   z-index: 3;
 }
@@ -363,7 +363,26 @@ input[type="number"]:focus, select:focus {
 
 .plane, .outage-form, .route-box, .compare {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 12px;
+  padding: 16px 4px 8px;
+  display: grid;
+  gap: 12px;
+}
+
+.outage-form > p {
+  margin: 0;
+  padding-inline: 2px;
+}
+
+.outage-form .actions {
+  margin-top: 4px;
+  padding-inline: 2px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stack > .hint {
+  margin: 4px 0 12px;
+  padding-inline: 2px;
 }
 
 .plane label {
@@ -501,11 +520,6 @@ input[type="range"]::-moz-range-thumb {
 }
 .good { color: var(--good); }
 .bad { color: var(--danger); }
-
-.plane, .outage-form, .route-box, .compare {
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  padding-top: 12px;
-}
 
 .sat-list {
   display: grid;

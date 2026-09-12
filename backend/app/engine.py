@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import threading
 from collections import OrderedDict
 from dataclasses import dataclass, field
 
@@ -19,9 +21,18 @@ from .scenario import validate_payload
 from .snapshot import enrich_snapshot
 from .timegrid import time_grid
 
-# Tuned for 1 vCPU / ~1–2 GB RAM VPS.
-MAX_CACHED_SIMS = 2
-MAX_FRAME_CACHE = 12
+# Tuned for ~4 vCPU / multi-user VPS.
+MAX_CACHED_SIMS = int(os.environ.get("MAX_CACHED_SIMS", "6"))
+MAX_FRAME_CACHE = int(os.environ.get("MAX_FRAME_CACHE", "48"))
+# Per-process heavy-job slots. With 2 workers keep this at 1 → ≤2 concurrent full sims.
+SIM_SLOTS = max(1, int(os.environ.get("SIM_SLOTS", "1")))
+SIM_WAIT_S = float(os.environ.get("SIM_WAIT_S", "50"))
+
+_sim_gate = threading.BoundedSemaphore(SIM_SLOTS)
+
+
+class BusyError(RuntimeError):
+    """Too many concurrent full-day simulations."""
 
 
 def scenario_hash(scenario: dict, mode: str = "bfs") -> str:
@@ -87,16 +98,7 @@ def snapshot_at(scenario: dict, t_s: float, sim_id: str | None = None) -> dict:
     return enrich_snapshot(scenario, t_s)
 
 
-def simulate(scenario: dict, mode: str = "bfs") -> Simulation:
-    check = validate_payload(scenario)
-    if not check["ok"]:
-        raise ValueError(check["error"])
-    if mode not in {"bfs", "dijkstra"}:
-        raise ValueError("mode must be bfs or dijkstra")
-    sim_id = scenario_hash(scenario, mode)
-    cached = get_sim(sim_id)
-    if cached is not None:
-        return cached
+def _run_simulate(scenario: dict, mode: str, sim_id: str) -> Simulation:
     times = time_grid(scenario)
     client_ids = [c["id"] for c in clients_of(scenario)]
     series = empty_series(client_ids)
@@ -108,7 +110,6 @@ def simulate(scenario: dict, mode: str = "bfs") -> Simulation:
         for cid in client_ids:
             route = find_route(scenario, snap, cid, mode=mode)
             path = route["path"] or []
-            # Compact export rows only — drop hops/delay/reason duplicates.
             routes.append({"t_s": t, "client_id": cid, "path": path})
             series[cid]["reachable"].append(bool(path))
             series[cid]["hops"].append(route["hops"])
@@ -127,6 +128,31 @@ def simulate(scenario: dict, mode: str = "bfs") -> Simulation:
         routes=routes,
     )
     return _put_sim(sim)
+
+
+def simulate(scenario: dict, mode: str = "bfs") -> Simulation:
+    check = validate_payload(scenario)
+    if not check["ok"]:
+        raise ValueError(check["error"])
+    if mode not in {"bfs", "dijkstra"}:
+        raise ValueError("mode must be bfs or dijkstra")
+    sim_id = scenario_hash(scenario, mode)
+    cached = get_sim(sim_id)
+    if cached is not None:
+        return cached
+
+    acquired = _sim_gate.acquire(timeout=SIM_WAIT_S)
+    if not acquired:
+        raise BusyError(
+            "Сервер занят тяжёлым расчётом. Подождите несколько секунд и повторите."
+        )
+    try:
+        cached = get_sim(sim_id)
+        if cached is not None:
+            return cached
+        return _run_simulate(scenario, mode, sim_id)
+    finally:
+        _sim_gate.release()
 
 
 def export_simulation(sim: Simulation) -> dict:
