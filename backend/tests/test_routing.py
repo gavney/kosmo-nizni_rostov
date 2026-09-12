@@ -23,6 +23,26 @@ def test_route_has_gateway() -> None:
     assert route["path"][-1] == "G_MUR"
     assert route["hops"] >= 2
     assert route["delay_ms"] is not None
+    assert "has_backup" in route
+    assert "backup_path" in route
+    assert "spof" in route
+    if route["has_backup"]:
+        primary = set(route["path"]) & {s["id"] for s in FULL["design"]["satellites"]}
+        backup = set(route["backup_path"]) & {s["id"] for s in FULL["design"]["satellites"]}
+        assert primary.isdisjoint(backup)
+        assert route["backup_path"][0] == "C65"
+        assert route["backup_path"][-1] == "G_MUR"
+
+
+def test_resilience_metrics_present() -> None:
+    sim = simulate(FULL, mode="bfs")
+    assert "resilience" in sim.metrics
+    row = sim.metrics["resilience"]["C65"]
+    assert 0 <= row["backup_share"] <= 1
+    assert "spof_top" in row
+    for item in row["spof_top"]:
+        assert "availability_if_failed" in item
+        assert item["availability_if_failed"] <= sim.metrics["clients"]["C65"]["availability"] + 1e-9
 
 
 def test_first_launch_can_have_outage_reason() -> None:

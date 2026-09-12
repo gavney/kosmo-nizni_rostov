@@ -22,7 +22,16 @@ const CLIENT = "#6fdb9a";
 const ISL = "#3aa8b8";
 const ISL_HOT = "#6eefe0";
 const ROUTE = "#fff1b0";
-export type DisplayRoute = { clientId: string; path: string[]; color: string };
+const ROUTE_GOLD = "#ffd56a";
+const ROUTE_BACKUP = "#b8c4d4";
+export type DisplayRoute = {
+  clientId: string;
+  path: string[];
+  color: string;
+  backupPath?: string[];
+  hasBackup?: boolean;
+  spof?: string[];
+};
 const UP = new Vector3(0, 1, 0);
 const _n = new Vector3();
 const _a = new Vector3();
@@ -141,6 +150,7 @@ function MovingLine({
   opacity,
   lift = 0,
   throttle = false,
+  dashed = false,
 }: {
   a: string;
   b: string;
@@ -150,6 +160,7 @@ function MovingLine({
   opacity: number;
   lift?: number;
   throttle?: boolean;
+  dashed?: boolean;
 }) {
   const ref = useRef<Line2>(null);
   const tick = useRef(0);
@@ -180,6 +191,7 @@ function MovingLine({
       }
     }
     line.geometry.setPositions(arr);
+    if (dashed) line.computeLineDistances();
   });
 
   return (
@@ -191,6 +203,10 @@ function MovingLine({
       transparent
       opacity={opacity}
       depthWrite={false}
+      dashed={dashed}
+      dashSize={dashed ? 0.04 : undefined}
+      gapSize={dashed ? 0.028 : undefined}
+      dashScale={dashed ? 1 : undefined}
     />
   );
 }
@@ -557,7 +573,12 @@ export default function Network({
   followedId,
   criticalIds = [],
   planeOf = {},
+  showIsl = true,
+  showOrbits = true,
   showCoverage = true,
+  showCritical = true,
+  showLabels = true,
+  showBackup = false,
   lite = false,
   blendSec = 0.28,
   onSatPick,
@@ -567,14 +588,22 @@ export default function Network({
   followedId: string | null;
   criticalIds?: string[];
   planeOf?: Record<string, string>;
+  showIsl?: boolean;
+  showOrbits?: boolean;
   showCoverage?: boolean;
+  showCritical?: boolean;
+  showLabels?: boolean;
+  showBackup?: boolean;
   lite?: boolean;
   blendSec?: number;
   onSatPick: (id: string) => void;
 }) {
   const positions = useSmoothedPositions(snapshot, blendSec);
   const satIds = useMemo(() => new Set(snapshot.satellites.map((s) => s.id)), [snapshot.satellites]);
-  const critical = useMemo(() => new Set(criticalIds), [criticalIds]);
+  const critical = useMemo(
+    () => new Set(showCritical ? criticalIds : []),
+    [criticalIds, showCritical],
+  );
   const routeKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const route of routes) {
@@ -590,13 +619,19 @@ export default function Network({
     const map = new Map<string, string>();
     for (const route of routes) {
       for (const id of route.path) {
-        if (!map.has(id)) map.set(id, route.color);
+        if (!map.has(id)) map.set(id, showBackup ? ROUTE_GOLD : route.color);
+      }
+      if (showBackup) {
+        for (const id of route.backupPath ?? []) {
+          if (!map.has(id)) map.set(id, ROUTE_BACKUP);
+        }
       }
     }
     return map;
-  }, [routes]);
+  }, [routes, showBackup]);
 
   const isl = useMemo(() => {
+    if (!showIsl) return [] as [string, string][];
     const out: [string, string][] = [];
     for (const [a, b] of snapshot.edges) {
       if (!satIds.has(a) || !satIds.has(b)) continue;
@@ -605,7 +640,7 @@ export default function Network({
       if (lite && out.length >= 24) break;
     }
     return out;
-  }, [snapshot.edges, satIds, routeKeys, lite]);
+  }, [snapshot.edges, satIds, routeKeys, lite, showIsl]);
 
   const clientRouteById = useMemo(() => {
     const map = new Map<string, DisplayRoute>();
@@ -615,7 +650,7 @@ export default function Network({
 
   return (
     <group>
-      {!lite && Object.keys(planeOf).length > 0 && (
+      {showOrbits && !lite && Object.keys(planeOf).length > 0 && (
         <OrbitTracks snapshot={snapshot} planeOf={planeOf} positions={positions} />
       )}
       {isl.map(([a, b]) => {
@@ -640,13 +675,31 @@ export default function Network({
             a={id}
             b={route.path[i + 1]}
             positions={positions}
-            color={route.color || ROUTE}
-            lineWidth={1.35}
+            color={showBackup ? ROUTE_GOLD : route.color || ROUTE}
+            lineWidth={showBackup ? 1.55 : 1.35}
             opacity={0.96}
             lift={0.01 + ri * 0.004}
           />
         )),
       )}
+      {showBackup &&
+        routes.map((route, ri) => {
+          const backup = route.backupPath ?? [];
+          if (backup.length < 2) return null;
+          return backup.slice(0, -1).map((id, i) => (
+            <MovingLine
+              key={`bk-${route.clientId}-${id}-${backup[i + 1]}`}
+              a={id}
+              b={backup[i + 1]}
+              positions={positions}
+              color={ROUTE_BACKUP}
+              lineWidth={1.15}
+              opacity={0.85}
+              lift={0.018 + ri * 0.004}
+              dashed
+            />
+          ));
+        })}
       {showCoverage &&
         routes.map((route) => (
           <CoverageHalo
@@ -668,7 +721,7 @@ export default function Network({
           routeColor={satRouteColor.get(sat.id)}
           positions={positions}
           onPick={onSatPick}
-          showLabel
+          showLabel={showLabels}
         />
       ))}
       {followedId && <Nadir id={followedId} positions={positions} />}
@@ -691,25 +744,27 @@ export default function Network({
             detail={detail}
             accent={clientRoute?.color}
             positions={positions}
-            showLabel={onRoute || g.role === "gateway" || g.role === "client"}
+            showLabel={showLabels && (onRoute || g.role === "gateway" || g.role === "client")}
           />
         );
       })}
-      {routes.map((route) => {
-        if (route.path.length < 2) return null;
-        const anchorId = route.path[Math.floor(route.path.length / 2)] ?? null;
-        if (!anchorId) return null;
-        return (
-          <PathLabel
-            key={`lbl-${route.clientId}`}
-            ids={route.path}
-            anchorId={anchorId}
-            color={route.color}
-            positions={positions}
-          />
-        );
-      })}
-      {GEO_LABELS.map((g) => {
+      {showLabels &&
+        routes.map((route) => {
+          if (route.path.length < 2) return null;
+          const anchorId = route.path[Math.floor(route.path.length / 2)] ?? null;
+          if (!anchorId) return null;
+          return (
+            <PathLabel
+              key={`lbl-${route.clientId}`}
+              ids={route.path}
+              anchorId={anchorId}
+              color={route.color}
+              positions={positions}
+            />
+          );
+        })}
+      {showLabels &&
+        GEO_LABELS.map((g) => {
           const p = latLonToThree(g.lat, g.lon, 1.012);
           return (
             <FacingHtml key={g.name} position={p}>

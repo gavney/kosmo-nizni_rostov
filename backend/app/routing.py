@@ -53,8 +53,10 @@ def find_route(
     snapshot: dict,
     client_id: str,
     mode: str = "bfs",
+    exclude_sats: set[str] | None = None,
 ) -> dict:
-    sats = satellite_ids(scenario)
+    blocked = exclude_sats or set()
+    sats = satellite_ids(scenario) - blocked
     gw_ids = [g["id"] for g in gateways_of(scenario)]
     gw_set = set(gw_ids)
     adj = build_adjacency(snapshot["edges"])
@@ -73,9 +75,25 @@ def find_route(
             "length_km": None,
             "delay_ms": None,
             "reason": reason,
+            "backup_path": [],
+            "has_backup": False,
+            "spof": [],
         }
     length = _path_length(path, adj)
     hops = len(path) - 1
+    primary_sats = {n for n in path if n in satellite_ids(scenario)}
+    backup = _path_only(
+        scenario,
+        snapshot,
+        client_id,
+        mode=mode,
+        exclude_sats=primary_sats | blocked,
+    )
+    spof = []
+    for sid in primary_sats:
+        alt = _path_only(scenario, snapshot, client_id, mode=mode, exclude_sats={sid} | blocked)
+        if not alt:
+            spof.append(sid)
     return {
         "t_s": snapshot["t_s"],
         "client_id": client_id,
@@ -84,7 +102,25 @@ def find_route(
         "length_km": length,
         "delay_ms": (length / C_KM_S) * 1000.0,
         "reason": None,
+        "backup_path": backup or [],
+        "has_backup": bool(backup),
+        "spof": spof,
     }
+
+
+def _path_only(
+    scenario: dict,
+    snapshot: dict,
+    client_id: str,
+    mode: str,
+    exclude_sats: set[str],
+) -> list[str] | None:
+    sats = satellite_ids(scenario) - exclude_sats
+    gw_set = {g["id"] for g in gateways_of(scenario)}
+    adj = build_adjacency(snapshot["edges"])
+    if mode == "dijkstra":
+        return _dijkstra(client_id, gw_set, adj, sats)
+    return _bfs(client_id, gw_set, adj, sats)
 
 
 def _neighbors(

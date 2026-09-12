@@ -40,6 +40,7 @@ def _public_series(series: dict[str, dict]) -> dict[str, dict]:
             "hops": data["hops"],
             "reason": data["reason"],
             "delay_ms": data["delay_ms"],
+            "has_backup": data.get("has_backup", []),
         }
     return out
 

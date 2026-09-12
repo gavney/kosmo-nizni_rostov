@@ -37,7 +37,7 @@ class BusyError(RuntimeError):
 
 def scenario_hash(scenario: dict, mode: str = "bfs") -> str:
     blob = json.dumps(
-        {"mode": mode, "scenario": scenario},
+        {"mode": mode, "scenario": scenario, "engine": "resilience_v1"},
         sort_keys=True,
         ensure_ascii=False,
         separators=(",", ":"),
@@ -110,11 +110,22 @@ def _run_simulate(scenario: dict, mode: str, sim_id: str) -> Simulation:
         for cid in client_ids:
             route = find_route(scenario, snap, cid, mode=mode)
             path = route["path"] or []
-            routes.append({"t_s": t, "client_id": cid, "path": path})
+            routes.append(
+                {
+                    "t_s": t,
+                    "client_id": cid,
+                    "path": path,
+                    "backup_path": route.get("backup_path") or [],
+                    "has_backup": bool(route.get("has_backup")),
+                    "spof": route.get("spof") or [],
+                }
+            )
             series[cid]["reachable"].append(bool(path))
             series[cid]["hops"].append(route["hops"])
             series[cid]["reason"].append(route["reason"])
             series[cid]["delay_ms"].append(route["delay_ms"])
+            series[cid]["has_backup"].append(bool(route.get("has_backup")))
+            series[cid]["spof"].append(list(route.get("spof") or []))
     step = int(scenario["environment"]["step_s"])
     metrics = summarize_metrics(scenario, series, step)
     sim = Simulation(

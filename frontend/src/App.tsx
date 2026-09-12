@@ -3,7 +3,9 @@ import Sidebar from "./components/Sidebar";
 import ComparePanel from "./components/ComparePanel";
 import Globe from "./components/Globe";
 import GroundPanel from "./components/GroundPanel";
+import LayerPanel, { DEFAULT_GLOBE_LAYERS, type GlobeLayers } from "./components/LayerPanel";
 import { MetricsList, clientRouteColor } from "./components/Metrics";
+import ResiliencePanel from "./components/ResiliencePanel";
 import ProjectPanel from "./components/ProjectPanel";
 import SatellitesPanel from "./components/SatellitesPanel";
 import Timeline, { PLAYBACK_SPEEDS } from "./components/Timeline";
@@ -57,6 +59,7 @@ export default function App() {
   const [tab, setTab] = useState<TabId>("orbit");
   const [clientId, setClientId] = useState("C65");
   const [showAllClients, setShowAllClients] = useState(false);
+  const [layers, setLayers] = useState<GlobeLayers>(DEFAULT_GLOBE_LAYERS);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(0.5);
@@ -86,6 +89,9 @@ export default function App() {
       clientId: r.client_id,
       path: r.path,
       color: clientRouteColor(r.client_id, clientIds),
+      backupPath: r.backup_path ?? [],
+      hasBackup: Boolean(r.has_backup),
+      spof: r.spof ?? [],
     }));
   }, [snap, showAllClients, clientId, clientIds]);
   const route: RouteInfo | undefined = snap?.routes.find((r) => r.client_id === clientId);
@@ -328,10 +334,12 @@ export default function App() {
         followedId={followedSat}
         criticalIds={criticalIds}
         planeOf={planeOf}
+        layers={layers}
         playing={playing}
         blendSec={playing ? Math.max(0.18, Math.round(240 / speed) / 1000) : 0.18}
         onSatPick={pickSatellite}
       />
+      <LayerPanel layers={layers} onChange={setLayers} raised={showAllClients} />
       {offlineClients.length > 0 && (
         <aside className="comm-alarm" role="status">
           <span className="comm-alarm-bang">!</span>
@@ -412,11 +420,25 @@ export default function App() {
                   <p key={r.clientId} className="route-colored">
                     <i className="metric-swatch" style={{ background: r.color }} />
                     {r.path.length ? r.path.join(" → ") : `${r.clientId}: ${reasonLabel(snap?.routes.find((x) => x.client_id === r.clientId)?.reason ?? null)}`}
+                    {layers.backup && r.path.length > 0 && (
+                      <span className="backup-inline">
+                        {r.hasBackup
+                          ? ` · резерв ${r.backupPath?.join(" → ")}`
+                          : " · без резерва"}
+                      </span>
+                    )}
                   </p>
                 ))
               ) : (
                 <>
                   <p>{route?.path.length ? route.path.join(" → ") : reasonLabel(route?.reason ?? null)}</p>
+                  {layers.backup && route?.path.length ? (
+                    <p className="backup-inline">
+                      {route.has_backup
+                        ? `резерв: ${(route.backup_path ?? []).join(" → ")}`
+                        : `без резерва${route.spof?.length ? ` · SPOF ${route.spof.join(", ")}` : ""}`}
+                    </p>
+                  ) : null}
                   {sim.metrics.clients[clientId] && (
                     <p>
                       цель {pct(sim.metrics.target_availability)} · сейчас{" "}
@@ -426,6 +448,16 @@ export default function App() {
                 </>
               )}
             </div>
+            {layers.backup && (
+              <ResiliencePanel
+                sim={sim}
+                clientId={clientId}
+                showAll={showAllClients}
+                hasBackupNow={Boolean(route?.has_backup)}
+                backupPath={route?.backup_path ?? []}
+                spofNow={route?.spof ?? []}
+              />
+            )}
           </div>
         )}
         {tab === "satellites" && (

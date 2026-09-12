@@ -51,6 +51,25 @@ export type RouteInfo = {
   length_km: number | null;
   delay_ms: number | null;
   reason: string | null;
+  backup_path?: string[];
+  has_backup?: boolean;
+  spof?: string[];
+};
+
+export type SpofInfo = {
+  satellite_id: string;
+  spof_steps: number;
+  spof_share: number;
+  availability_if_failed: number;
+  availability_delta: number;
+};
+
+export type ClientResilience = {
+  backup_share: number;
+  backup_steps: number;
+  single_path_share: number;
+  single_path_steps: number;
+  spof_top: SpofInfo[];
 };
 
 export type Snapshot = {
@@ -88,6 +107,7 @@ export type Series = {
   hops: (number | null)[];
   reason: (string | null)[];
   delay_ms: (number | null)[];
+  has_backup?: boolean[];
 };
 
 export type Hotspot = {
@@ -104,6 +124,7 @@ export type Simulation = {
     n_steps: number;
     target_availability: number;
     clients: Record<string, ClientMetrics>;
+    resilience?: Record<string, ClientResilience>;
   };
   series: Record<string, Series>;
   hotspots?: Hotspot[];

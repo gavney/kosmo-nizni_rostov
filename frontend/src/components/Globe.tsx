@@ -1,10 +1,11 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Stars, useProgress } from "@react-three/drei";
+import { OrbitControls, useProgress } from "@react-three/drei";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ACESFilmicToneMapping, MOUSE, SRGBColorSpace, TOUCH, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Snapshot } from "../types";
 import { ecefToThree, latLonToThree } from "../format";
+import CrispStarfield from "./CrispStarfield";
 import Earth from "./Earth";
 import Network, { type DisplayRoute } from "./Network";
 import ErrorBoundary from "./ErrorBoundary";
@@ -153,6 +154,7 @@ function GlobeScene({
   followedId,
   criticalIds,
   planeOf,
+  layers,
   playing,
   blendSec,
   onSatPick,
@@ -162,6 +164,14 @@ function GlobeScene({
   followedId: string | null;
   criticalIds: string[];
   planeOf: Record<string, string>;
+  layers: {
+    isl: boolean;
+    orbits: boolean;
+    coverage: boolean;
+    critical: boolean;
+    labels: boolean;
+    backup: boolean;
+  };
   playing: boolean;
   blendSec: number;
   onSatPick: (id: string) => void;
@@ -176,7 +186,7 @@ function GlobeScene({
   return (
     <Canvas
       camera={{ position: EUROPE_VIEW.pos, fov: 36, near: 0.08, far: 200 }}
-      dpr={[1, 1.5]}
+      dpr={[1, 2]}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
       onCreated={({ gl }) => {
         gl.toneMapping = ACESFilmicToneMapping;
@@ -185,7 +195,7 @@ function GlobeScene({
       }}
     >
       <color attach="background" args={["#000000"]} />
-      <Stars radius={70} depth={30} count={1200} factor={1.6} saturation={0.04} fade speed={0.03} />
+      <CrispStarfield count={10000} radius={100} depth={80} />
       <CameraRig snapshot={snapshot} controlsRef={controlsRef} />
       <Tracker followId={followedId} position={followPos} controlsRef={controlsRef} />
       <Suspense
@@ -204,6 +214,12 @@ function GlobeScene({
             followedId={followedId}
             criticalIds={criticalIds}
             planeOf={planeOf}
+            showIsl={layers.isl}
+            showOrbits={layers.orbits}
+            showCoverage={layers.coverage}
+            showCritical={layers.critical}
+            showLabels={layers.labels}
+            showBackup={layers.backup}
             lite={playing}
             blendSec={blendSec}
             onSatPick={onSatPick}
@@ -244,10 +260,26 @@ export default function Globe(props: {
   followedId: string | null;
   criticalIds?: string[];
   planeOf?: Record<string, string>;
+  layers?: {
+    isl: boolean;
+    orbits: boolean;
+    coverage: boolean;
+    critical: boolean;
+    labels: boolean;
+    backup: boolean;
+  };
   playing?: boolean;
   blendSec?: number;
   onSatPick: (id: string) => void;
 }) {
+  const layers = props.layers ?? {
+    isl: true,
+    orbits: true,
+    coverage: true,
+    critical: true,
+    labels: true,
+    backup: false,
+  };
   return (
     <ErrorBoundary fallback={<div className="globe-fallback">Глобус не загрузился — панель расчёта справа работает.</div>}>
       <div
@@ -259,6 +291,7 @@ export default function Globe(props: {
         <GlobeBootOverlay />
         <GlobeScene
           {...props}
+          layers={layers}
           criticalIds={props.criticalIds ?? []}
           planeOf={props.planeOf ?? {}}
           playing={Boolean(props.playing)}
