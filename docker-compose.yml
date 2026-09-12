@@ -6,6 +6,8 @@ services:
     expose:
       - "8000"
     restart: unless-stopped
+    mem_limit: 1536m
+    cpus: 1.5
 
   frontend:
     build:
@@ -16,3 +18,5 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    mem_limit: 512m
+

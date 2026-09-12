@@ -200,7 +200,7 @@ export default function App() {
     if (debounce.current) window.clearTimeout(debounce.current);
     debounce.current = window.setTimeout(() => {
       void loadSim(next);
-    }, 450);
+    }, 900);
   };
 
   const onUpload = async (file: File) => {

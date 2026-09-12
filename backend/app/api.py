@@ -82,7 +82,7 @@ def post_simulate(body: SimulateBody) -> dict:
         "times": sim.times,
         "metrics": sim.metrics,
         "series": _public_series(sim.series),
-        "n_snapshots": len(sim.snapshots),
+        "n_snapshots": len(sim.times),
     }
 
 
