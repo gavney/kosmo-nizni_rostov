@@ -3,7 +3,7 @@ import Sidebar from "./components/Sidebar";
 import ComparePanel from "./components/ComparePanel";
 import Globe from "./components/Globe";
 import GroundPanel from "./components/GroundPanel";
-import { MetricsList } from "./components/Metrics";
+import { MetricsList, clientRouteColor } from "./components/Metrics";
 import ProjectPanel from "./components/ProjectPanel";
 import SatellitesPanel from "./components/SatellitesPanel";
 import Timeline, { PLAYBACK_SPEEDS } from "./components/Timeline";
@@ -56,9 +56,10 @@ export default function App() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [tab, setTab] = useState<TabId>("orbit");
   const [clientId, setClientId] = useState("C65");
+  const [showAllClients, setShowAllClients] = useState(false);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState(0.5);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"bfs" | "dijkstra">("bfs");
@@ -72,7 +73,25 @@ export default function App() {
   const [compare, setCompare] = useState<CompareResult | null>(null);
   const debounce = useRef<number | null>(null);
   const t = sim?.times[index] ?? 0;
+  const clientIds = useMemo(
+    () => (sim ? Object.keys(sim.metrics.clients) : scenario?.ground_sites.filter((g) => g.role === "client").map((g) => g.id) ?? []),
+    [sim, scenario],
+  );
+  const displayRoutes = useMemo(() => {
+    if (!snap) return [];
+    const source = showAllClients
+      ? snap.routes
+      : snap.routes.filter((r) => r.client_id === clientId);
+    return source.map((r) => ({
+      clientId: r.client_id,
+      path: r.path,
+      color: clientRouteColor(r.client_id, clientIds),
+    }));
+  }, [snap, showAllClients, clientId, clientIds]);
   const route: RouteInfo | undefined = snap?.routes.find((r) => r.client_id === clientId);
+  const primaryRoute = showAllClients
+    ? snap?.routes.find((r) => r.path.length) ?? route
+    : route;
 
   const pickSatellite = (id: string) => {
     setSelectedSat(id);
@@ -131,7 +150,6 @@ export default function App() {
       setIndex(idx);
       const shot = await fetchSnapshot(next, result.times[idx] ?? 0, {
         sim_id: result.sim_id,
-        client_id: next.ground_sites.find((g) => g.role === "client")?.id,
         mode: nextMode,
       });
       setSnap(shot);
@@ -172,7 +190,6 @@ export default function App() {
     const ac = new AbortController();
     fetchSnapshot(scenario, t, {
       sim_id: sim.sim_id,
-      client_id: clientId,
       mode,
       signal: ac.signal,
     }).then(
@@ -184,7 +201,7 @@ export default function App() {
       },
     );
     return () => ac.abort();
-  }, [scenario, sim, t, clientId, mode]);
+  }, [scenario, sim, t, mode]);
 
   useEffect(() => {
     if (!playing || !sim) return;
@@ -261,10 +278,18 @@ export default function App() {
     }
   };
 
-  const delay = route?.delay_ms;
+  const delay = primaryRoute?.delay_ms;
   const activeCount = useMemo(
     () => snap?.satellites.filter((s) => s.active).length ?? 0,
     [snap],
+  );
+  const offlineClients = useMemo(() => {
+    if (!showAllClients) return route?.path.length ? [] : [clientId];
+    return displayRoutes.filter((r) => !r.path.length).map((r) => r.clientId);
+  }, [showAllClients, route, clientId, displayRoutes]);
+  const routePathUnion = useMemo(
+    () => displayRoutes.flatMap((r) => r.path),
+    [displayRoutes],
   );
 
   if (!scenario) {
@@ -282,21 +307,20 @@ export default function App() {
     <div className="shell">
       <Globe
         snapshot={snap}
-        routePath={route?.path ?? []}
-        connected={Boolean(route?.path.length)}
+        routes={displayRoutes}
         followedId={followedSat}
         playing={playing}
         blendSec={playing ? Math.max(0.18, Math.round(240 / speed) / 1000) : 0.18}
         onSatPick={pickSatellite}
       />
-      {!route?.path.length && (
+      {offlineClients.length > 0 && (
         <aside className="comm-alarm" role="status">
           <span className="comm-alarm-bang">!</span>
           <div>
             <p className="comm-alarm-title">НЕТ СВЯЗИ</p>
             <p className="comm-alarm-body">
-              {clientId}: маршрут до шлюза отсутствует
-              {route?.reason ? ` · ${reasonLabel(route.reason)}` : ""}
+              {offlineClients.join(", ")}: маршрут до шлюза отсутствует
+              {!showAllClients && route?.reason ? ` · ${reasonLabel(route.reason)}` : ""}
             </p>
           </div>
         </aside>
@@ -353,14 +377,34 @@ export default function App() {
                 Минимум км
               </button>
             </div>
-            <MetricsList sim={sim} clientId={clientId} onSelect={setClientId} />
+            <MetricsList
+              sim={sim}
+              clientId={clientId}
+              showAll={showAllClients}
+              onSelect={(id) => {
+                setShowAllClients(false);
+                setClientId(id);
+              }}
+              onSelectAll={() => setShowAllClients(true)}
+            />
             <div className="route-box">
-              <p>{route?.path.length ? route.path.join(" → ") : reasonLabel(route?.reason ?? null)}</p>
-              {sim.metrics.clients[clientId] && (
-                <p>
-                  цель {pct(sim.metrics.target_availability)} · сейчас{" "}
-                  {pct(sim.metrics.clients[clientId].availability)}
-                </p>
+              {showAllClients ? (
+                displayRoutes.map((r) => (
+                  <p key={r.clientId} className="route-colored">
+                    <i className="metric-swatch" style={{ background: r.color }} />
+                    {r.path.length ? r.path.join(" → ") : `${r.clientId}: ${reasonLabel(snap?.routes.find((x) => x.client_id === r.clientId)?.reason ?? null)}`}
+                  </p>
+                ))
+              ) : (
+                <>
+                  <p>{route?.path.length ? route.path.join(" → ") : reasonLabel(route?.reason ?? null)}</p>
+                  {sim.metrics.clients[clientId] && (
+                    <p>
+                      цель {pct(sim.metrics.target_availability)} · сейчас{" "}
+                      {pct(sim.metrics.clients[clientId].availability)}
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
@@ -371,7 +415,7 @@ export default function App() {
             snapshot={snap}
             selected={selectedSat}
             followed={followedSat}
-            routePath={route?.path ?? []}
+            routePath={routePathUnion}
             start={failStart}
             end={failEnd}
             onSelect={setSelectedSat}

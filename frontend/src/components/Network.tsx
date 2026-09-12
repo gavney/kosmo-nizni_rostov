@@ -22,6 +22,7 @@ const CLIENT = "#6fdb9a";
 const ISL = "#3aa8b8";
 const ISL_HOT = "#6eefe0";
 const ROUTE = "#fff1b0";
+export type DisplayRoute = { clientId: string; path: string[]; color: string };
 const UP = new Vector3(0, 1, 0);
 const _n = new Vector3();
 const _a = new Vector3();
@@ -199,6 +200,7 @@ function SatDot({
   active,
   followed,
   onRoute,
+  routeColor,
   positions,
   onPick,
   showLabel = true,
@@ -207,6 +209,7 @@ function SatDot({
   active: boolean;
   followed: boolean;
   onRoute: boolean;
+  routeColor?: string;
   positions: MutableRefObject<PosMap>;
   onPick: (id: string) => void;
   showLabel?: boolean;
@@ -214,7 +217,7 @@ function SatDot({
   const ref = useRef<Group>(null);
   // Bigger + brighter so night side still reads.
   const size = followed ? 0.011 : onRoute ? 0.009 : active ? 0.0065 : 0.0048;
-  const color = followed ? SAT_FOLLOW : onRoute ? SAT_ROUTE : active ? SAT : "#5a6a75";
+  const color = followed ? SAT_FOLLOW : onRoute ? routeColor || SAT_ROUTE : active ? SAT : "#5a6a75";
   const opacity = followed || onRoute ? 1 : active ? 0.92 : 0.55;
   useFrame(() => {
     const p = positions.current.get(id);
@@ -283,6 +286,7 @@ function GroundPin({
   kind,
   label,
   detail,
+  accent,
   positions,
   showLabel = true,
 }: {
@@ -290,11 +294,12 @@ function GroundPin({
   kind: "gateway" | "client";
   label: string;
   detail?: string;
+  accent?: string;
   positions: MutableRefObject<PosMap>;
   showLabel?: boolean;
 }) {
   const ref = useRef<Group>(null);
-  const color = kind === "gateway" ? GATEWAY : CLIENT;
+  const color = accent ?? (kind === "gateway" ? GATEWAY : CLIENT);
   const size = kind === "gateway" ? 0.016 : 0.011;
   const text = detail ? `${label} · ${detail}` : label;
   useFrame(() => {
@@ -385,16 +390,14 @@ function Nadir({ id, positions }: { id: string; positions: MutableRefObject<PosM
 
 export default function Network({
   snapshot,
-  routePath,
-  connected,
+  routes,
   followedId,
   lite = false,
   blendSec = 0.28,
   onSatPick,
 }: {
   snapshot: Snapshot;
-  routePath: string[];
-  connected: boolean;
+  routes: DisplayRoute[];
   followedId: string | null;
   lite?: boolean;
   blendSec?: number;
@@ -404,12 +407,24 @@ export default function Network({
   const satIds = useMemo(() => new Set(snapshot.satellites.map((s) => s.id)), [snapshot.satellites]);
   const routeKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (let i = 0; i < routePath.length - 1; i += 1) {
-      keys.add(`${routePath[i]}|${routePath[i + 1]}`);
-      keys.add(`${routePath[i + 1]}|${routePath[i]}`);
+    for (const route of routes) {
+      for (let i = 0; i < route.path.length - 1; i += 1) {
+        keys.add(`${route.path[i]}|${route.path[i + 1]}`);
+        keys.add(`${route.path[i + 1]}|${route.path[i]}`);
+      }
     }
     return keys;
-  }, [routePath]);
+  }, [routes]);
+
+  const satRouteColor = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const route of routes) {
+      for (const id of route.path) {
+        if (!map.has(id)) map.set(id, route.color);
+      }
+    }
+    return map;
+  }, [routes]);
 
   const isl = useMemo(() => {
     const out: [string, string][] = [];
@@ -422,8 +437,11 @@ export default function Network({
     return out;
   }, [snapshot.edges, satIds, routeKeys, lite]);
 
-  const pathAnchorId = routePath[Math.floor(routePath.length / 2)] ?? null;
-  const labeled = new Set(routePath);
+  const clientRouteById = useMemo(() => {
+    const map = new Map<string, DisplayRoute>();
+    for (const route of routes) map.set(route.clientId, route);
+    return map;
+  }, [routes]);
 
   return (
     <group>
@@ -442,25 +460,28 @@ export default function Network({
           />
         );
       })}
-      {routePath.slice(0, -1).map((id, i) => (
-        <MovingLine
-          key={`rt-${id}-${routePath[i + 1]}`}
-          a={id}
-          b={routePath[i + 1]}
-          positions={positions}
-          color={ROUTE}
-          lineWidth={1.35}
-          opacity={0.96}
-          lift={0.012}
-        />
-      ))}
+      {routes.map((route, ri) =>
+        route.path.slice(0, -1).map((id, i) => (
+          <MovingLine
+            key={`rt-${route.clientId}-${id}-${route.path[i + 1]}`}
+            a={id}
+            b={route.path[i + 1]}
+            positions={positions}
+            color={route.color || ROUTE}
+            lineWidth={1.35}
+            opacity={0.96}
+            lift={0.01 + ri * 0.004}
+          />
+        )),
+      )}
       {snapshot.satellites.map((sat) => (
         <SatDot
           key={sat.id}
           id={sat.id}
           active={sat.active}
           followed={sat.id === followedId}
-          onRoute={routePath.includes(sat.id)}
+          onRoute={satRouteColor.has(sat.id)}
+          routeColor={satRouteColor.get(sat.id)}
           positions={positions}
           onPick={onSatPick}
           showLabel
@@ -468,11 +489,12 @@ export default function Network({
       ))}
       {followedId && <Nadir id={followedId} positions={positions} />}
       {snapshot.ground.map((g) => {
-        const onRoute = labeled.has(g.id);
+        const clientRoute = clientRouteById.get(g.id);
+        const onRoute = Boolean(clientRoute) || satRouteColor.has(g.id);
         const isGw = g.role === "gateway";
         const detail =
-          g.role === "client" && onRoute
-            ? connected
+          g.role === "client" && clientRoute
+            ? clientRoute.path.length
               ? "связь есть"
               : "нет маршрута"
             : undefined;
@@ -483,14 +505,26 @@ export default function Network({
             kind={isGw ? "gateway" : "client"}
             label={g.id}
             detail={detail}
+            accent={clientRoute?.color}
             positions={positions}
-            showLabel
+            showLabel={onRoute || g.role === "gateway" || g.role === "client"}
           />
         );
       })}
-      {pathAnchorId && routePath.length > 1 && (
-        <PathLabel ids={routePath} anchorId={pathAnchorId} positions={positions} />
-      )}
+      {routes.map((route) => {
+        if (route.path.length < 2) return null;
+        const anchorId = route.path[Math.floor(route.path.length / 2)] ?? null;
+        if (!anchorId) return null;
+        return (
+          <PathLabel
+            key={`lbl-${route.clientId}`}
+            ids={route.path}
+            anchorId={anchorId}
+            color={route.color}
+            positions={positions}
+          />
+        );
+      })}
       {GEO_LABELS.map((g) => {
           const p = latLonToThree(g.lat, g.lon, 1.012);
           return (
@@ -506,10 +540,12 @@ export default function Network({
 function PathLabel({
   ids,
   anchorId,
+  color,
   positions,
 }: {
   ids: string[];
   anchorId: string;
+  color?: string;
   positions: MutableRefObject<PosMap>;
 }) {
   const ref = useRef<Group>(null);
@@ -522,7 +558,9 @@ function PathLabel({
   return (
     <group ref={ref}>
       <FacingHtml position={[0, 0, 0]}>
-        <div className="globe-label globe-label-path">{ids.join(" → ")}</div>
+        <div className="globe-label globe-label-path" style={color ? { color, borderColor: color } : undefined}>
+          {ids.join(" → ")}
+        </div>
       </FacingHtml>
     </group>
   );

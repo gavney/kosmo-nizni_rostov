@@ -6,7 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Snapshot } from "../types";
 import { ecefToThree, latLonToThree } from "../format";
 import Earth from "./Earth";
-import Network from "./Network";
+import Network, { type DisplayRoute } from "./Network";
 import ErrorBoundary from "./ErrorBoundary";
 
 const EUROPE_VIEW = {
@@ -149,16 +149,14 @@ function Tracker({
 
 function GlobeScene({
   snapshot,
-  routePath,
-  connected,
+  routes,
   followedId,
   playing,
   blendSec,
   onSatPick,
 }: {
   snapshot: Snapshot | null;
-  routePath: string[];
-  connected: boolean;
+  routes: DisplayRoute[];
   followedId: string | null;
   playing: boolean;
   blendSec: number;
@@ -198,8 +196,7 @@ function GlobeScene({
         {snapshot && (
           <Network
             snapshot={snapshot}
-            routePath={routePath}
-            connected={connected}
+            routes={routes}
             followedId={followedId}
             lite={playing}
             blendSec={blendSec}
@@ -237,8 +234,7 @@ function GlobeScene({
 
 export default function Globe(props: {
   snapshot: Snapshot | null;
-  routePath: string[];
-  connected: boolean;
+  routes: DisplayRoute[];
   followedId: string | null;
   playing?: boolean;
   blendSec?: number;

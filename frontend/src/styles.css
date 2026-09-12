@@ -505,6 +505,37 @@ input[type="range"]::-moz-range-thumb {
   justify-content: space-between;
   gap: 8px;
 }
+.metric-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.metric-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+}
+.metric-swatches {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.metric-all-hint {
+  font-weight: 500;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.route-colored {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.route-colored .metric-swatch {
+  margin-top: 5px;
+}
 .bar {
   height: 4px;
   background: rgba(255, 255, 255, 0.12);
