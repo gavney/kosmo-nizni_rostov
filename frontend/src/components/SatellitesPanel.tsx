@@ -4,9 +4,11 @@ export default function SatellitesPanel({
   scenario,
   snapshot,
   selected,
+  followed,
   start,
   end,
   onSelect,
+  onFollow,
   onStart,
   onEnd,
   onFail,
@@ -15,9 +17,11 @@ export default function SatellitesPanel({
   scenario: Scenario;
   snapshot: Snapshot | null;
   selected: string | null;
+  followed: string | null;
   start: number;
   end: number;
   onSelect: (id: string) => void;
+  onFollow: (id: string | null) => void;
   onStart: (value: number) => void;
   onEnd: (value: number) => void;
   onFail: () => void;
@@ -32,7 +36,7 @@ export default function SatellitesPanel({
   return (
     <div className="stack">
       <h2>Спутники</h2>
-      <p className="lead">Отметьте аппарат и задайте интервал отказа.</p>
+      <p className="lead">Клик по аппарату в списке или на глобусе. На глобусе повторный клик включает слежение.</p>
       <div className="sat-list">
         {scenario.design.satellites.map((sat) => {
           const live = snapshot?.satellites.find((s) => s.id === sat.id);
@@ -65,6 +69,13 @@ export default function SatellitesPanel({
             <input type="number" value={end} onChange={(e) => onEnd(Number(e.target.value))} />
           </label>
           <div className="actions">
+            <button
+              type="button"
+              className={followed === selected ? "active" : ""}
+              onClick={() => onFollow(followed === selected ? null : selected)}
+            >
+              {followed === selected ? "Отпустить камеру" : "Следить на глобусе"}
+            </button>
             <button type="button" onClick={onFail}>
               Задать отказ
             </button>

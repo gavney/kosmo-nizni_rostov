@@ -46,10 +46,11 @@ export function simulate(scenario: Scenario, mode = "bfs") {
 export function snapshot(
   scenario: Scenario,
   t_s: number,
-  opts?: { sim_id?: string; client_id?: string; mode?: string },
+  opts?: { sim_id?: string; client_id?: string; mode?: string; signal?: AbortSignal },
 ) {
   return request<Snapshot>("/api/snapshot", {
     method: "POST",
+    signal: opts?.signal,
     body: JSON.stringify({
       scenario,
       t_s,

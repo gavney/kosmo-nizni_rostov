@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Scenario } from "../types";
 import { StagePills } from "./Metrics";
 
@@ -24,6 +25,8 @@ export default function ProjectPanel({
   onReset: () => void;
   busy: boolean;
 }) {
+  const [fileName, setFileName] = useState("");
+
   return (
     <div className="stack">
       <h2>Проект</h2>
@@ -41,18 +44,25 @@ export default function ProjectPanel({
           ))}
         </select>
       </label>
-      <label className="field">
+      <div className="field">
         Загрузить JSON
-        <input
-          type="file"
-          accept="application/json"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) onUpload(file);
-            e.target.value = "";
-          }}
-        />
-      </label>
+        <label className="file-field">
+          <input
+            type="file"
+            accept="application/json"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setFileName(file.name);
+                onUpload(file);
+              }
+              e.target.value = "";
+            }}
+          />
+          <span className="file-cta">Выбрать файл</span>
+          <span className="file-name">{fileName || "JSON не выбран"}</span>
+        </label>
+      </div>
       <StagePills scenario={scenario} onChange={onStage} />
       {scenario.design.planes.map((plane) => (
         <div key={plane.id} className="plane">

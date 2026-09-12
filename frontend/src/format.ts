@@ -6,6 +6,13 @@ export function ecefToThree(x: number, y: number, z: number, scale = 1 / R_KM): 
   return [x * scale, z * scale, -y * scale];
 }
 
+export function latLonToThree(latDeg: number, lonDeg: number, radius = 1): [number, number, number] {
+  const lat = (latDeg * Math.PI) / 180;
+  const lon = (lonDeg * Math.PI) / 180;
+  const cl = Math.cos(lat);
+  return ecefToThree(cl * Math.cos(lon) * radius, cl * Math.sin(lon) * radius, Math.sin(lat) * radius, 1);
+}
+
 export function formatClock(t: number): string {
   const h = Math.floor(t / 3600);
   const m = Math.floor((t % 3600) / 60);
