@@ -23,7 +23,6 @@ const ISL = "#3aa8b8";
 const ISL_HOT = "#6eefe0";
 const ROUTE = "#fff1b0";
 const ROUTE_GOLD = "#ffd56a";
-const ROUTE_BACKUP = "#b8c4d4";
 export type DisplayRoute = {
   clientId: string;
   path: string[];
@@ -623,7 +622,7 @@ export default function Network({
       }
       if (showBackup) {
         for (const id of route.backupPath ?? []) {
-          if (!map.has(id)) map.set(id, ROUTE_BACKUP);
+          if (!map.has(id)) map.set(id, route.color);
         }
       }
     }
@@ -692,9 +691,9 @@ export default function Network({
               a={id}
               b={backup[i + 1]}
               positions={positions}
-              color={ROUTE_BACKUP}
-              lineWidth={1.15}
-              opacity={0.85}
+              color={route.color || ROUTE}
+              lineWidth={1.2}
+              opacity={0.9}
               lift={0.018 + ri * 0.004}
               dashed
             />
