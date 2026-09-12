@@ -885,6 +885,29 @@ button.ghost:disabled {
 }
 .error { color: var(--danger); font-size: 13px; font-weight: 600; }
 .compare ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 13px; }
+.diff-box {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.diff-title {
+  margin: 8px 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.78);
+}
+.diff-box .diff-title { margin: 0; }
+.diff-list {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--ink);
+  font-size: 13px;
+}
+.diff-list li { margin: 2px 0; }
 .winner { color: var(--amber); font-weight: 650; }
 .toast { margin: 0; }
 
