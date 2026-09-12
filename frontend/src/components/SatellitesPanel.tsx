@@ -5,6 +5,7 @@ export default function SatellitesPanel({
   snapshot,
   selected,
   followed,
+  routePath,
   start,
   end,
   onSelect,
@@ -18,6 +19,7 @@ export default function SatellitesPanel({
   snapshot: Snapshot | null;
   selected: string | null;
   followed: string | null;
+  routePath: string[];
   start: number;
   end: number;
   onSelect: (id: string) => void;
@@ -32,25 +34,41 @@ export default function SatellitesPanel({
       .filter((f) => snapshot && f.start_s <= snapshot.t_s && snapshot.t_s < f.end_s)
       .map((f) => f.satellite_id),
   );
+  const onRoute = new Set(routePath);
+  const selectedHasFailure = selected
+    ? scenario.failures.some((f) => f.satellite_id === selected)
+    : false;
 
   return (
     <div className="stack">
       <h2>Спутники</h2>
-      <p className="lead">Клик по аппарату в списке или на глобусе. На глобусе повторный клик включает слежение.</p>
+      <p className="lead">
+        Жёлтым — в цепи передачи. Клик по КА на глобусе — камера летит за ним; повторный клик / «Снять
+        слежение» — возврат к обзору. ПКМ / СКМ — сдвиг камеры (как pan в Blender).
+      </p>
       <div className="sat-list">
         {scenario.design.satellites.map((sat) => {
           const live = snapshot?.satellites.find((s) => s.id === sat.id);
           const inactive = live ? !live.active : sat.launch_batch > scenario.design.launch_stage;
+          const relay = onRoute.has(sat.id);
           return (
             <button
               key={sat.id}
               type="button"
-              className={`sat ${selected === sat.id ? "active" : ""} ${inactive ? "dim" : ""}`}
+              className={[
+                "sat",
+                selected === sat.id ? "active" : "",
+                inactive ? "dim" : "",
+                relay ? "on-route" : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
               onClick={() => onSelect(sat.id)}
             >
               <b>{sat.id}</b>
               <span>
                 {sat.plane_id} · партия {sat.launch_batch}
+                {relay ? " · в цепи" : ""}
                 {failedNow.has(sat.id) ? " · отказ" : ""}
               </span>
             </button>
@@ -79,8 +97,14 @@ export default function SatellitesPanel({
             <button type="button" onClick={onFail}>
               Задать отказ
             </button>
-            <button type="button" className="ghost" onClick={onClear}>
-              Снять
+            <button
+              type="button"
+              className="ghost"
+              disabled={!selectedHasFailure}
+              title={selectedHasFailure ? "Убрать отказ этого КА" : "Для этого КА отказ не задан"}
+              onClick={onClear}
+            >
+              Снять отказ
             </button>
           </div>
         </div>

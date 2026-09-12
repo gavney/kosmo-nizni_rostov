@@ -286,8 +286,21 @@ export default function App() {
         connected={Boolean(route?.path.length)}
         followedId={followedSat}
         playing={playing}
+        blendSec={playing ? Math.max(0.22, Math.round(320 / speed) / 1000) : 0.2}
         onSatPick={pickSatellite}
       />
+      {!route?.path.length && (
+        <aside className="comm-alarm" role="status">
+          <span className="comm-alarm-bang">!</span>
+          <div>
+            <p className="comm-alarm-title">НЕТ СВЯЗИ</p>
+            <p className="comm-alarm-body">
+              {clientId}: маршрут до шлюза отсутствует
+              {route?.reason ? ` · ${reasonLabel(route.reason)}` : ""}
+            </p>
+          </div>
+        </aside>
+      )}
       <Sidebar tab={tab} onChange={setTab} />
       <header className="toolbar glass">
         <div className="toolbar-title">
@@ -300,7 +313,7 @@ export default function App() {
           <span className="stat-pill">{delay != null ? `${delay.toFixed(1)} мс` : "Нет маршрута"}</span>
           {followedSat ? (
             <button type="button" className="follow-chip" onClick={() => setFollowedSat(null)}>
-              Слежение · {followedSat}
+              Снять слежение · {followedSat} ✕
             </button>
           ) : null}
         </div>
@@ -358,6 +371,7 @@ export default function App() {
             snapshot={snap}
             selected={selectedSat}
             followed={followedSat}
+            routePath={route?.path ?? []}
             start={failStart}
             end={failEnd}
             onSelect={setSelectedSat}

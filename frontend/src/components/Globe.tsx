@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Stars, useProgress } from "@react-three/drei";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ACESFilmicToneMapping, SRGBColorSpace, Vector3 } from "three";
+import { ACESFilmicToneMapping, MOUSE, SRGBColorSpace, TOUCH, Vector3 } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { Snapshot } from "../types";
 import { ecefToThree, latLonToThree } from "../format";
@@ -21,7 +21,6 @@ function GlobeBootOverlay() {
 
   useEffect(() => {
     if (!visible) return;
-    // Wait until at least one asset finished and the manager is idle.
     if (loaded > 0 && !active) {
       setFade(true);
       const id = window.setTimeout(() => setVisible(false), 420);
@@ -30,7 +29,6 @@ function GlobeBootOverlay() {
   }, [active, loaded, visible]);
 
   useEffect(() => {
-    // Safety: never block the UI forever if progress events are missed.
     const id = window.setTimeout(() => {
       setFade(true);
       window.setTimeout(() => setVisible(false), 420);
@@ -91,30 +89,60 @@ function Tracker({
 }) {
   const { camera } = useThree();
   const desiredCam = useRef(new Vector3());
-  const desiredTarget = useRef(new Vector3());
+  const homePos = useRef(new Vector3(...EUROPE_VIEW.pos));
+  const homeTarget = useRef(new Vector3(...EUROPE_VIEW.target));
+  const approached = useRef(false);
+  const goingHome = useRef(false);
+  const prevFollow = useRef<string | null>(null);
+
+  useEffect(() => {
+    approached.current = false;
+  }, [followId]);
 
   useFrame((_, dt) => {
     const controls = controlsRef.current;
-    if (!followId || !position || !controls) {
-      if (controls && !followId) {
-        controls.minDistance = 1.38;
-        controls.maxDistance = 4.6;
+    if (!controls) return;
+    const k = 1 - Math.exp(-4.0 * Math.min(dt, 0.05));
+
+    if (prevFollow.current && !followId) {
+      goingHome.current = true;
+    }
+    prevFollow.current = followId;
+
+    if (followId && position) {
+      goingHome.current = false;
+      const sat = new Vector3(...position);
+      // OrbitControls keeps spherical offset vs target → camera flies with the sat.
+      controls.target.lerp(sat, k);
+      controls.minDistance = 0.12;
+      controls.maxDistance = 5.2;
+
+      if (!approached.current) {
+        const radial = sat.clone().normalize();
+        const tangent = new Vector3().crossVectors(radial, new Vector3(0, 1, 0));
+        if (tangent.lengthSq() < 1e-8) tangent.set(1, 0, 0);
+        tangent.normalize();
+        desiredCam.current.copy(sat).addScaledVector(radial, 0.52).addScaledVector(tangent, 0.2);
+        camera.position.lerp(desiredCam.current, k);
+        if (camera.position.distanceTo(desiredCam.current) < 0.05) approached.current = true;
       }
+      controls.update();
       return;
     }
-    const sat = new Vector3(...position);
-    const radial = sat.clone().normalize();
-    const tangent = new Vector3().crossVectors(radial, new Vector3(0, 1, 0));
-    if (tangent.lengthSq() < 1e-8) tangent.set(1, 0, 0);
-    tangent.normalize();
-    desiredTarget.current.copy(sat);
-    desiredCam.current.copy(sat).add(radial.multiplyScalar(0.52)).add(tangent.multiplyScalar(0.2));
-    const k = 1 - Math.exp(-4.2 * Math.min(dt, 0.05));
-    camera.position.lerp(desiredCam.current, k);
-    controls.target.lerp(desiredTarget.current, k);
-    controls.minDistance = 0.18;
-    controls.maxDistance = 3.4;
-    controls.update();
+
+    if (goingHome.current) {
+      controls.minDistance = 1.2;
+      controls.maxDistance = 5.2;
+      camera.position.lerp(homePos.current, k);
+      controls.target.lerp(homeTarget.current, k);
+      controls.update();
+      if (
+        camera.position.distanceTo(homePos.current) < 0.04 &&
+        controls.target.distanceTo(homeTarget.current) < 0.02
+      ) {
+        goingHome.current = false;
+      }
+    }
   });
   return null;
 }
@@ -125,6 +153,7 @@ function GlobeScene({
   connected,
   followedId,
   playing,
+  blendSec,
   onSatPick,
 }: {
   snapshot: Snapshot | null;
@@ -132,6 +161,7 @@ function GlobeScene({
   connected: boolean;
   followedId: string | null;
   playing: boolean;
+  blendSec: number;
   onSatPick: (id: string) => void;
 }) {
   const controlsRef = useRef<OrbitControlsImpl>(null);
@@ -172,18 +202,34 @@ function GlobeScene({
             connected={connected}
             followedId={followedId}
             lite={playing}
+            blendSec={blendSec}
             onSatPick={onSatPick}
           />
         )}
       </Suspense>
       <OrbitControls
         ref={controlsRef}
-        enablePan={false}
-        minDistance={followedId ? 0.18 : 1.38}
-        maxDistance={4.6}
+        enablePan
+        screenSpacePanning
+        panSpeed={1.05}
+        enableRotate
+        rotateSpeed={0.72}
+        enableZoom
+        zoomSpeed={0.9}
+        minDistance={followedId ? 0.12 : 1.2}
+        maxDistance={5.2}
         autoRotate={false}
         enableDamping
         dampingFactor={0.06}
+        mouseButtons={{
+          LEFT: MOUSE.ROTATE,
+          MIDDLE: MOUSE.PAN,
+          RIGHT: MOUSE.PAN,
+        }}
+        touches={{
+          ONE: TOUCH.ROTATE,
+          TWO: TOUCH.DOLLY_PAN,
+        }}
       />
     </Canvas>
   );
@@ -195,13 +241,23 @@ export default function Globe(props: {
   connected: boolean;
   followedId: string | null;
   playing?: boolean;
+  blendSec?: number;
   onSatPick: (id: string) => void;
 }) {
   return (
     <ErrorBoundary fallback={<div className="globe-fallback">Глобус не загрузился — панель расчёта справа работает.</div>}>
-      <div className="globe-root">
+      <div
+        className="globe-root"
+        onContextMenu={(e) => {
+          e.preventDefault();
+        }}
+      >
         <GlobeBootOverlay />
-        <GlobeScene playing={Boolean(props.playing)} {...props} />
+        <GlobeScene
+          {...props}
+          playing={Boolean(props.playing)}
+          blendSec={props.blendSec ?? 0.28}
+        />
       </div>
     </ErrorBoundary>
   );

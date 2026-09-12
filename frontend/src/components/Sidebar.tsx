@@ -37,9 +37,13 @@ export default function Sidebar({
         ))}
       </nav>
       <p className="sidebar-keys">
-        Пробел — пуск
+        ЛКМ — вращать
         <br />
-        ← → — шаг · [ ] — скорость
+        ПКМ / СКМ — сдвиг
+        <br />
+        Клик по КА — слежение
+        <br />
+        Пробел — пуск · Esc — домой
       </p>
     </aside>
   );

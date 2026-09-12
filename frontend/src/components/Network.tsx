@@ -14,15 +14,14 @@ const GEO_LABELS: { name: string; lat: number; lon: number }[] = [
 ];
 
 const NADIR = "#46ff6a";
-const SAT = "#8ec8e8";
-const SAT_DIM = "#445560";
-const SAT_ROUTE = "#d7eef8";
+const SAT = "#9ec8dc";
+const SAT_ROUTE = "#ffd45a";
+const SAT_FOLLOW = "#7dffb2";
 const GATEWAY = "#f0b24a";
 const CLIENT = "#6fdb9a";
 const ISL = "#3aa8b8";
 const ISL_HOT = "#6eefe0";
-const ROUTE = "#f6f3ea";
-const BLEND_S = 0.12;
+const ROUTE = "#fff1b0";
 const UP = new Vector3(0, 1, 0);
 const _n = new Vector3();
 const _a = new Vector3();
@@ -68,46 +67,35 @@ function fillTargets(snapshot: Snapshot, into: PosMap) {
   return into;
 }
 
-function useSmoothedPositions(snapshot: Snapshot): MutableRefObject<PosMap> {
+/** Dirty smooth: chase target every frame. Longer tau while playing ≈ tick gap. */
+function useSmoothedPositions(snapshot: Snapshot, blendSec: number): MutableRefObject<PosMap> {
   const current = useRef<PosMap>(new Map());
-  const from = useRef<PosMap>(new Map());
   const to = useRef<PosMap>(new Map());
-  const started = useRef(0);
-  const blending = useRef(false);
+  const tauRef = useRef(blendSec);
 
   useEffect(() => {
-    if (current.current.size === 0) {
-      fillTargets(snapshot, to.current);
-      copyInto(current.current, to.current);
-      copyInto(from.current, to.current);
-      started.current = performance.now() - BLEND_S * 1000;
-      blending.current = false;
-      return;
-    }
-    copyInto(from.current, current.current);
+    tauRef.current = Math.max(0.12, blendSec);
+  }, [blendSec]);
+
+  useEffect(() => {
     fillTargets(snapshot, to.current);
-    started.current = performance.now();
-    blending.current = true;
+    if (current.current.size === 0) {
+      copyInto(current.current, to.current);
+    }
   }, [snapshot]);
 
-  useFrame(() => {
-    if (!blending.current && to.current.size === current.current.size) {
-      // still lerp briefly after jump; cheap early-out when settled
-      const age = performance.now() - started.current;
-      if (age > BLEND_S * 1000) return;
-    }
-    const u = Math.min(1, (performance.now() - started.current) / (BLEND_S * 1000));
-    const s = u * u * (3 - 2 * u);
+  useFrame((_, dt) => {
+    const tau = tauRef.current;
+    const k = 1 - Math.exp(-Math.min(dt, 0.08) / tau);
     for (const [id, tgt] of to.current) {
       let cur = current.current.get(id);
-      const origin = from.current.get(id) ?? tgt;
       if (!cur) {
-        cur = origin.clone();
+        cur = tgt.clone();
         current.current.set(id, cur);
+        continue;
       }
-      cur.lerpVectors(origin, tgt, s);
+      cur.lerp(tgt, k);
     }
-    if (u >= 1) blending.current = false;
   });
 
   return current;
@@ -224,14 +212,24 @@ function SatDot({
   showLabel?: boolean;
 }) {
   const ref = useRef<Group>(null);
-  const size = followed ? 0.0075 : onRoute ? 0.0058 : 0.0042;
-  const color = followed ? NADIR : onRoute ? SAT_ROUTE : active ? SAT : SAT_DIM;
+  // Bigger + brighter so night side still reads.
+  const size = followed ? 0.011 : onRoute ? 0.009 : active ? 0.0065 : 0.0048;
+  const color = followed ? SAT_FOLLOW : onRoute ? SAT_ROUTE : active ? SAT : "#5a6a75";
+  const opacity = followed || onRoute ? 1 : active ? 0.92 : 0.55;
   useFrame(() => {
     const p = positions.current.get(id);
     if (p && ref.current) ref.current.position.copy(p);
   });
   return (
     <group ref={ref}>
+      {(followed || onRoute) && (
+        <Billboard follow>
+          <mesh>
+            <ringGeometry args={[size * 1.35, size * 1.85, 16]} />
+            <meshBasicMaterial color={color} side={DoubleSide} transparent opacity={0.85} depthWrite={false} />
+          </mesh>
+        </Billboard>
+      )}
       <mesh
         onClick={(e) => {
           e.stopPropagation();
@@ -245,8 +243,8 @@ function SatDot({
           document.body.style.cursor = "auto";
         }}
       >
-        <sphereGeometry args={[size, 6, 6]} />
-        <meshBasicMaterial color={color} transparent opacity={active || followed ? 0.95 : 0.4} />
+        <sphereGeometry args={[size, 8, 8]} />
+        <meshBasicMaterial color={color} transparent opacity={opacity} depthWrite={false} />
       </mesh>
       <mesh
         visible={false}
@@ -262,12 +260,18 @@ function SatDot({
           document.body.style.cursor = "auto";
         }}
       >
-        <sphereGeometry args={[0.018, 6, 6]} />
+        <sphereGeometry args={[0.022, 6, 6]} />
         <meshBasicMaterial />
       </mesh>
-      {showLabel && (followed || onRoute) && (
-        <FacingHtml position={[0, 0.016, 0]}>
-          <div className={`globe-label ${followed ? "globe-label-follow" : "globe-label-sat"}`}>{id}</div>
+      {showLabel && (
+        <FacingHtml position={[0, 0.02, 0]}>
+          <div
+            className={`globe-label ${
+              followed ? "globe-label-follow" : onRoute ? "globe-label-sat" : "globe-label-idle"
+            }`}
+          >
+            {id}
+          </div>
         </FacingHtml>
       )}
     </group>
@@ -385,6 +389,7 @@ export default function Network({
   connected,
   followedId,
   lite = false,
+  blendSec = 0.28,
   onSatPick,
 }: {
   snapshot: Snapshot;
@@ -392,9 +397,10 @@ export default function Network({
   connected: boolean;
   followedId: string | null;
   lite?: boolean;
+  blendSec?: number;
   onSatPick: (id: string) => void;
 }) {
-  const positions = useSmoothedPositions(snapshot);
+  const positions = useSmoothedPositions(snapshot, blendSec);
   const satIds = useMemo(() => new Set(snapshot.satellites.map((s) => s.id)), [snapshot.satellites]);
   const routeKeys = useMemo(() => {
     const keys = new Set<string>();
@@ -457,7 +463,7 @@ export default function Network({
           onRoute={routePath.includes(sat.id)}
           positions={positions}
           onPick={onSatPick}
-          showLabel={!lite || sat.id === followedId}
+          showLabel
         />
       ))}
       {followedId && <Nadir id={followedId} positions={positions} />}
@@ -476,17 +482,16 @@ export default function Network({
             id={g.id}
             kind={isGw ? "gateway" : "client"}
             label={g.id}
-            detail={lite ? undefined : detail}
+            detail={detail}
             positions={positions}
-            showLabel={!lite}
+            showLabel
           />
         );
       })}
-      {!lite && pathAnchorId && routePath.length > 1 && (
+      {pathAnchorId && routePath.length > 1 && (
         <PathLabel ids={routePath} anchorId={pathAnchorId} positions={positions} />
       )}
-      {!lite &&
-        GEO_LABELS.map((g) => {
+      {GEO_LABELS.map((g) => {
           const p = latLonToThree(g.lat, g.lon, 1.012);
           return (
             <FacingHtml key={g.name} position={p}>
