@@ -6,8 +6,8 @@ services:
     expose:
       - "8000"
     restart: unless-stopped
-    mem_limit: 1536m
-    cpus: 1.5
+    # 1 vCPU VPS: do not set cpus > 1
+    mem_limit: 900m
 
   frontend:
     build:
@@ -18,5 +18,4 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-    mem_limit: 512m
-
+    mem_limit: 256m

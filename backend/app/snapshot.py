@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+from .geometry import ground_position
 from .geometry import snapshot as geometry_snapshot
-from .sun import SUN_ECI, sun_ecef
-from .geometry import sunlight, ground_position
+from .sun import sun_ecef
 
 
 def enrich_snapshot(scenario: dict, t_s: float) -> dict:
+    """UI frame: geometry + sun direction + ground markers. No elevation maps / eclipse."""
     snap = geometry_snapshot(scenario, t_s)
-    sun = sun_ecef(scenario, t_s)
-    lit = sunlight(scenario, t_s, list(SUN_ECI))
-    for sat in snap["satellites"]:
-        sat["sunlit"] = bool(lit.get(sat["id"], False))
-    snap["sun_ecef"] = sun
+    # Drop bulky per-site elevation maps — frontend does not use them.
+    snap.pop("elevation_deg", None)
+    snap["sun_ecef"] = sun_ecef(scenario, t_s)
     snap["ground"] = []
     for site in scenario["ground_sites"]:
         xyz = ground_position(site)

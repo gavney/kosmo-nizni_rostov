@@ -411,7 +411,7 @@ export default function Network({
       if (!satIds.has(a) || !satIds.has(b)) continue;
       if (routeKeys.has(`${a}|${b}`)) continue;
       out.push([a, b]);
-      if (lite && out.length >= 48) break;
+      if (lite && out.length >= 24) break;
     }
     return out;
   }, [snapshot.edges, satIds, routeKeys, lite]);

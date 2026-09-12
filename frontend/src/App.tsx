@@ -188,7 +188,8 @@ export default function App() {
 
   useEffect(() => {
     if (!playing || !sim) return;
-    const interval = Math.max(90, Math.round(200 / speed));
+    // Slower scrub on weak VPS — each tick hits /snapshot.
+    const interval = Math.max(180, Math.round(320 / speed));
     const id = window.setInterval(() => {
       setIndex((prev) => (prev + 1) % sim.times.length);
     }, interval);
@@ -200,7 +201,7 @@ export default function App() {
     if (debounce.current) window.clearTimeout(debounce.current);
     debounce.current = window.setTimeout(() => {
       void loadSim(next);
-    }, 900);
+    }, 1200);
   };
 
   const onUpload = async (file: File) => {

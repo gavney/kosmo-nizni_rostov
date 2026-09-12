@@ -19,10 +19,9 @@ from .scenario import validate_payload
 from .snapshot import enrich_snapshot
 from .timegrid import time_grid
 
-# Keep few full sims; each still holds series + routes for export.
-MAX_CACHED_SIMS = 4
-# Playback frames only — do not store all 720 enriched snapshots.
-MAX_FRAME_CACHE = 32
+# Tuned for 1 vCPU / ~1–2 GB RAM VPS.
+MAX_CACHED_SIMS = 2
+MAX_FRAME_CACHE = 12
 
 
 def scenario_hash(scenario: dict, mode: str = "bfs") -> str:
@@ -41,7 +40,6 @@ class Simulation:
     scenario: dict
     times: list[int]
     mode: str = "bfs"
-    # Small LRU of enriched UI frames (t_s -> snapshot). Empty after simulate.
     snapshots: OrderedDict[int, dict] = field(default_factory=OrderedDict)
     series: dict[str, dict] = field(default_factory=dict)
     metrics: dict = field(default_factory=dict)
@@ -103,16 +101,16 @@ def simulate(scenario: dict, mode: str = "bfs") -> Simulation:
     client_ids = [c["id"] for c in clients_of(scenario)]
     series = empty_series(client_ids)
     routes: list[dict] = []
-    # Bare geometry only — no sun/ground enrich on the hot path.
     for t in times:
         snap = geometry_snapshot(scenario, t)
         visible = visible_clients(snap, scenario)
         attach_visibility(series, visible)
         for cid in client_ids:
             route = find_route(scenario, snap, cid, mode=mode)
-            routes.append(route)
-            reachable = bool(route["path"])
-            series[cid]["reachable"].append(reachable)
+            path = route["path"] or []
+            # Compact export rows only — drop hops/delay/reason duplicates.
+            routes.append({"t_s": t, "client_id": cid, "path": path})
+            series[cid]["reachable"].append(bool(path))
             series[cid]["hops"].append(route["hops"])
             series[cid]["reason"].append(route["reason"])
             series[cid]["delay_ms"].append(route["delay_ms"])

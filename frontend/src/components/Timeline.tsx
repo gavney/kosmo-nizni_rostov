@@ -1,7 +1,7 @@
 import { formatClock, downsample } from "../format";
 import type { Series } from "../types";
 
-export const PLAYBACK_SPEEDS = [0.25, 0.5, 1, 2, 4, 8];
+export const PLAYBACK_SPEEDS = [0.25, 0.5, 1];
 
 export default function Timeline({
   times,
