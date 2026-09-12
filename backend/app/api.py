@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from .engine import BusyError, export_simulation, get_sim, simulate, snapshot_at
+from .recommend import path_hotspots
 from .routing import find_route
 from .scenario import validate_payload
 
@@ -91,6 +92,7 @@ def post_simulate(body: SimulateBody) -> dict:
         "times": sim.times,
         "metrics": sim.metrics,
         "series": _public_series(sim.series),
+        "hotspots": path_hotspots(sim),
         "n_snapshots": len(sim.times),
     }
 
@@ -106,6 +108,7 @@ def get_simulation(sim_id: str) -> dict:
         "times": sim.times,
         "metrics": sim.metrics,
         "series": _public_series(sim.series),
+        "hotspots": path_hotspots(sim),
     }
 
 

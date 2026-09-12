@@ -151,6 +151,8 @@ function GlobeScene({
   snapshot,
   routes,
   followedId,
+  criticalIds,
+  planeOf,
   playing,
   blendSec,
   onSatPick,
@@ -158,6 +160,8 @@ function GlobeScene({
   snapshot: Snapshot | null;
   routes: DisplayRoute[];
   followedId: string | null;
+  criticalIds: string[];
+  planeOf: Record<string, string>;
   playing: boolean;
   blendSec: number;
   onSatPick: (id: string) => void;
@@ -198,6 +202,8 @@ function GlobeScene({
             snapshot={snapshot}
             routes={routes}
             followedId={followedId}
+            criticalIds={criticalIds}
+            planeOf={planeOf}
             lite={playing}
             blendSec={blendSec}
             onSatPick={onSatPick}
@@ -236,6 +242,8 @@ export default function Globe(props: {
   snapshot: Snapshot | null;
   routes: DisplayRoute[];
   followedId: string | null;
+  criticalIds?: string[];
+  planeOf?: Record<string, string>;
   playing?: boolean;
   blendSec?: number;
   onSatPick: (id: string) => void;
@@ -251,6 +259,8 @@ export default function Globe(props: {
         <GlobeBootOverlay />
         <GlobeScene
           {...props}
+          criticalIds={props.criticalIds ?? []}
+          planeOf={props.planeOf ?? {}}
           playing={Boolean(props.playing)}
           blendSec={props.blendSec ?? 0.28}
         />

@@ -6,6 +6,7 @@ export default function SatellitesPanel({
   selected,
   followed,
   routePath,
+  criticalIds = [],
   start,
   end,
   onSelect,
@@ -20,6 +21,7 @@ export default function SatellitesPanel({
   selected: string | null;
   followed: string | null;
   routePath: string[];
+  criticalIds?: string[];
   start: number;
   end: number;
   onSelect: (id: string) => void;
@@ -35,6 +37,7 @@ export default function SatellitesPanel({
       .map((f) => f.satellite_id),
   );
   const onRoute = new Set(routePath);
+  const critical = new Set(criticalIds);
   const selectedHasFailure = selected
     ? scenario.failures.some((f) => f.satellite_id === selected)
     : false;
@@ -43,14 +46,15 @@ export default function SatellitesPanel({
     <div className="stack">
       <h2>Спутники</h2>
       <p className="lead">
-        Жёлтым — в цепи передачи. Клик по КА на глобусе — камера летит за ним; повторный клик / «Снять
-        слежение» — возврат к обзору. ПКМ / СКМ — сдвиг камеры (как pan в Blender).
+        Жёлтым — в цепи передачи, коралловым — чаще всего в маршрутах за сутки. Клик по КА на глобусе —
+        слежение; ПКМ / СКМ — pan.
       </p>
       <div className="sat-list">
         {scenario.design.satellites.map((sat) => {
           const live = snapshot?.satellites.find((s) => s.id === sat.id);
           const inactive = live ? !live.active : sat.launch_batch > scenario.design.launch_stage;
           const relay = onRoute.has(sat.id);
+          const hot = critical.has(sat.id);
           return (
             <button
               key={sat.id}
@@ -60,6 +64,7 @@ export default function SatellitesPanel({
                 selected === sat.id ? "active" : "",
                 inactive ? "dim" : "",
                 relay ? "on-route" : "",
+                hot && !relay ? "critical" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
@@ -68,7 +73,7 @@ export default function SatellitesPanel({
               <b>{sat.id}</b>
               <span>
                 {sat.plane_id} · партия {sat.launch_batch}
-                {relay ? " · в цепи" : ""}
+                {relay ? " · в цепи" : hot ? " · критичный" : ""}
                 {failedNow.has(sat.id) ? " · отказ" : ""}
               </span>
             </button>

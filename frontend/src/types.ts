@@ -90,6 +90,12 @@ export type Series = {
   delay_ms: (number | null)[];
 };
 
+export type Hotspot = {
+  satellite_id: string;
+  on_route_share: number;
+  on_route_steps: number;
+};
+
 export type Simulation = {
   sim_id: string;
   mode: string;
@@ -100,6 +106,7 @@ export type Simulation = {
     clients: Record<string, ClientMetrics>;
   };
   series: Record<string, Series>;
+  hotspots?: Hotspot[];
   n_snapshots?: number;
 };
 

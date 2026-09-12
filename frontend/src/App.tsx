@@ -291,6 +291,23 @@ export default function App() {
     () => displayRoutes.flatMap((r) => r.path),
     [displayRoutes],
   );
+  const criticalIds = useMemo(
+    () => (sim?.hotspots ?? []).slice(0, 5).map((h) => h.satellite_id),
+    [sim],
+  );
+  const planeOf = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const sat of scenario?.design.satellites ?? []) map[sat.id] = sat.plane_id;
+    return map;
+  }, [scenario]);
+  const timelineLanes = useMemo(() => {
+    if (!sim || !showAllClients) return undefined;
+    return clientIds.map((id) => ({
+      id,
+      color: clientRouteColor(id, clientIds),
+      series: sim.series[id],
+    }));
+  }, [sim, showAllClients, clientIds]);
 
   if (!scenario) {
     return (
@@ -309,6 +326,8 @@ export default function App() {
         snapshot={snap}
         routes={displayRoutes}
         followedId={followedSat}
+        criticalIds={criticalIds}
+        planeOf={planeOf}
         playing={playing}
         blendSec={playing ? Math.max(0.18, Math.round(240 / speed) / 1000) : 0.18}
         onSatPick={pickSatellite}
@@ -416,6 +435,7 @@ export default function App() {
             selected={selectedSat}
             followed={followedSat}
             routePath={routePathUnion}
+            criticalIds={criticalIds}
             start={failStart}
             end={failEnd}
             onSelect={setSelectedSat}
@@ -483,6 +503,7 @@ export default function App() {
           playing={playing}
           speed={speed}
           series={sim.series[clientId]}
+          lanes={timelineLanes}
           onChange={setIndex}
           onToggle={() => setPlaying((v) => !v)}
           onSpeed={setSpeed}

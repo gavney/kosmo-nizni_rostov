@@ -200,6 +200,7 @@ function SatDot({
   active,
   followed,
   onRoute,
+  critical,
   routeColor,
   positions,
   onPick,
@@ -209,6 +210,7 @@ function SatDot({
   active: boolean;
   followed: boolean;
   onRoute: boolean;
+  critical?: boolean;
   routeColor?: string;
   positions: MutableRefObject<PosMap>;
   onPick: (id: string) => void;
@@ -216,16 +218,24 @@ function SatDot({
 }) {
   const ref = useRef<Group>(null);
   // Bigger + brighter so night side still reads.
-  const size = followed ? 0.011 : onRoute ? 0.009 : active ? 0.0065 : 0.0048;
-  const color = followed ? SAT_FOLLOW : onRoute ? routeColor || SAT_ROUTE : active ? SAT : "#5a6a75";
-  const opacity = followed || onRoute ? 1 : active ? 0.92 : 0.55;
+  const size = followed ? 0.011 : onRoute ? 0.009 : critical ? 0.0075 : active ? 0.0065 : 0.0048;
+  const color = followed
+    ? SAT_FOLLOW
+    : onRoute
+      ? routeColor || SAT_ROUTE
+      : critical
+        ? "#ff6b4a"
+        : active
+          ? SAT
+          : "#5a6a75";
+  const opacity = followed || onRoute || critical ? 1 : active ? 0.92 : 0.55;
   useFrame(() => {
     const p = positions.current.get(id);
     if (p && ref.current) ref.current.position.copy(p);
   });
   return (
     <group ref={ref}>
-      {(followed || onRoute) && (
+      {(followed || onRoute || critical) && (
         <Billboard follow>
           <mesh>
             <ringGeometry args={[size * 1.35, size * 1.85, 16]} />
@@ -270,7 +280,13 @@ function SatDot({
         <FacingHtml position={[0, 0.02, 0]}>
           <div
             className={`globe-label ${
-              followed ? "globe-label-follow" : onRoute ? "globe-label-sat" : "globe-label-idle"
+              followed
+                ? "globe-label-follow"
+                : onRoute
+                  ? "globe-label-sat"
+                  : critical
+                    ? "globe-label-critical"
+                    : "globe-label-idle"
             }`}
           >
             {id}
@@ -388,10 +404,160 @@ function Nadir({ id, positions }: { id: string; positions: MutableRefObject<PosM
   );
 }
 
+function CoverageHalo({
+  id,
+  color,
+  connected,
+  positions,
+}: {
+  id: string;
+  color: string;
+  connected: boolean;
+  positions: MutableRefObject<PosMap>;
+}) {
+  const ref = useRef<Group>(null);
+  const inner = connected ? 0.028 : 0.02;
+  const outer = connected ? 0.055 : 0.038;
+  useFrame(() => {
+    const p = positions.current.get(id);
+    if (!p || !ref.current) return;
+    _n.copy(p).normalize();
+    ref.current.position.copy(p).addScaledVector(_n, 0.004);
+    ref.current.quaternion.setFromUnitVectors(UP, _n);
+  });
+  return (
+    <group ref={ref}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[inner, outer, 48]} />
+        <meshBasicMaterial
+          color={color}
+          side={DoubleSide}
+          transparent
+          opacity={connected ? 0.38 : 0.16}
+          depthWrite={false}
+        />
+      </mesh>
+      <mesh rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[inner * 0.85, 32]} />
+        <meshBasicMaterial
+          color={color}
+          transparent
+          opacity={connected ? 0.12 : 0.04}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
+}
+
+function OrbitTracks({
+  snapshot,
+  planeOf,
+  positions,
+}: {
+  snapshot: Snapshot;
+  planeOf: Record<string, string>;
+  positions: MutableRefObject<PosMap>;
+}) {
+  const loops = useMemo(() => {
+    const byPlane = new Map<string, string[]>();
+    for (const sat of snapshot.satellites) {
+      if (!sat.active) continue;
+      const plane = planeOf[sat.id];
+      if (!plane) continue;
+      const list = byPlane.get(plane) ?? [];
+      list.push(sat.id);
+      byPlane.set(plane, list);
+    }
+    const out: { plane: string; ids: string[] }[] = [];
+    for (const [plane, ids] of byPlane) {
+      if (ids.length < 4) continue;
+      // Sort around approximate plane axis from first three positions.
+      const a = ecefToThree(
+        snapshot.satellites.find((s) => s.id === ids[0])!.x_km,
+        snapshot.satellites.find((s) => s.id === ids[0])!.y_km,
+        snapshot.satellites.find((s) => s.id === ids[0])!.z_km,
+      );
+      const b = ecefToThree(
+        snapshot.satellites.find((s) => s.id === ids[1])!.x_km,
+        snapshot.satellites.find((s) => s.id === ids[1])!.y_km,
+        snapshot.satellites.find((s) => s.id === ids[1])!.z_km,
+      );
+      const c = ecefToThree(
+        snapshot.satellites.find((s) => s.id === ids[2])!.x_km,
+        snapshot.satellites.find((s) => s.id === ids[2])!.y_km,
+        snapshot.satellites.find((s) => s.id === ids[2])!.z_km,
+      );
+      const va = new Vector3(...a);
+      const vb = new Vector3(...b);
+      const vc = new Vector3(...c);
+      const normal = new Vector3().crossVectors(vb.clone().sub(va), vc.clone().sub(va)).normalize();
+      if (normal.lengthSq() < 1e-8) continue;
+      const tangent = new Vector3().crossVectors(normal, va).normalize();
+      const bitangent = new Vector3().crossVectors(normal, tangent).normalize();
+      const ranked = ids
+        .map((id) => {
+          const sat = snapshot.satellites.find((s) => s.id === id)!;
+          const p = new Vector3(...ecefToThree(sat.x_km, sat.y_km, sat.z_km));
+          const angle = Math.atan2(p.dot(bitangent), p.dot(tangent));
+          return { id, angle };
+        })
+        .sort((x, y) => x.angle - y.angle)
+        .map((x) => x.id);
+      out.push({ plane, ids: ranked });
+    }
+    return out;
+  }, [snapshot, planeOf]);
+
+  return (
+    <group>
+      {loops.map(({ plane, ids }) => (
+        <OrbitLoop key={plane} ids={ids} positions={positions} />
+      ))}
+    </group>
+  );
+}
+
+function OrbitLoop({
+  ids,
+  positions,
+}: {
+  ids: string[];
+  positions: MutableRefObject<PosMap>;
+}) {
+  const ref = useRef<Line2>(null);
+  useFrame(() => {
+    if (!ref.current?.geometry) return;
+    const pts: number[] = [];
+    for (const id of ids) {
+      const p = positions.current.get(id);
+      if (!p) return;
+      pts.push(p.x, p.y, p.z);
+    }
+    const first = positions.current.get(ids[0]);
+    if (first) pts.push(first.x, first.y, first.z);
+    ref.current.geometry.setPositions(pts);
+  });
+  return (
+    <Line
+      ref={ref}
+      points={ids.map(() => [0, 0, 0] as [number, number, number])}
+      color="#3d5a6c"
+      lineWidth={0.55}
+      transparent
+      opacity={0.28}
+      depthWrite={false}
+    />
+  );
+}
+
 export default function Network({
   snapshot,
   routes,
   followedId,
+  criticalIds = [],
+  planeOf = {},
+  showCoverage = true,
   lite = false,
   blendSec = 0.28,
   onSatPick,
@@ -399,12 +565,16 @@ export default function Network({
   snapshot: Snapshot;
   routes: DisplayRoute[];
   followedId: string | null;
+  criticalIds?: string[];
+  planeOf?: Record<string, string>;
+  showCoverage?: boolean;
   lite?: boolean;
   blendSec?: number;
   onSatPick: (id: string) => void;
 }) {
   const positions = useSmoothedPositions(snapshot, blendSec);
   const satIds = useMemo(() => new Set(snapshot.satellites.map((s) => s.id)), [snapshot.satellites]);
+  const critical = useMemo(() => new Set(criticalIds), [criticalIds]);
   const routeKeys = useMemo(() => {
     const keys = new Set<string>();
     for (const route of routes) {
@@ -445,6 +615,9 @@ export default function Network({
 
   return (
     <group>
+      {!lite && Object.keys(planeOf).length > 0 && (
+        <OrbitTracks snapshot={snapshot} planeOf={planeOf} positions={positions} />
+      )}
       {isl.map(([a, b]) => {
         const hot = followedId === a || followedId === b;
         return (
@@ -474,6 +647,16 @@ export default function Network({
           />
         )),
       )}
+      {showCoverage &&
+        routes.map((route) => (
+          <CoverageHalo
+            key={`halo-${route.clientId}`}
+            id={route.clientId}
+            color={route.color}
+            connected={route.path.length > 0}
+            positions={positions}
+          />
+        ))}
       {snapshot.satellites.map((sat) => (
         <SatDot
           key={sat.id}
@@ -481,6 +664,7 @@ export default function Network({
           active={sat.active}
           followed={sat.id === followedId}
           onRoute={satRouteColor.has(sat.id)}
+          critical={critical.has(sat.id) && !satRouteColor.has(sat.id)}
           routeColor={satRouteColor.get(sat.id)}
           positions={positions}
           onPick={onSatPick}

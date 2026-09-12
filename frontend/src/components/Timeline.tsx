@@ -3,12 +3,48 @@ import type { Series } from "../types";
 
 export const PLAYBACK_SPEEDS = [0.25, 0.5, 1];
 
+type Lane = {
+  id: string;
+  color: string;
+  series: Series | undefined;
+};
+
+function sparkClass(reachable: boolean | undefined, visible: boolean | undefined): string {
+  if (reachable) return "on";
+  if (visible) return "vis";
+  return "off";
+}
+
+function LaneSpark({ lane, bins }: { lane: Lane; bins: number }) {
+  const reach = downsample(lane.series?.reachable ?? [], bins);
+  const vis = downsample(lane.series?.visible ?? [], bins);
+  const n = Math.max(reach.length, 1);
+  return (
+    <div className="spark-lane" title={lane.id}>
+      <i className="spark-dot" style={{ background: lane.color }} />
+      <div className="spark">
+        {reach.map((ok, i) => (
+          <span
+            key={i}
+            className={sparkClass(ok, vis[i])}
+            style={{
+              width: `${100 / n}%`,
+              background: ok ? lane.color : undefined,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Timeline({
   times,
   index,
   playing,
   speed,
   series,
+  lanes,
   onChange,
   onToggle,
   onSpeed,
@@ -19,17 +55,22 @@ export default function Timeline({
   playing: boolean;
   speed: number;
   series: Series | undefined;
+  lanes?: Lane[];
   onChange: (index: number) => void;
   onToggle: () => void;
   onSpeed: (speed: number) => void;
   onStep: (delta: number) => void;
 }) {
   const t = times[index] ?? 0;
+  const multi = Boolean(lanes && lanes.length > 1);
   const reachable = series?.reachable[index];
+  const visible = series?.visible[index];
   const flags = downsample(series?.reachable ?? [], 180);
+  const visFlags = downsample(series?.visible ?? [], 180);
+  const status = reachable ? "Связь есть" : visible ? "Видимость, нет маршрута" : "Перерыв";
 
   return (
-    <div className="timeline glass">
+    <div className={`timeline glass ${multi ? "timeline-multi" : ""}`}>
       <div className="transport">
         <button type="button" className="icon-btn" onClick={() => onStep(-1)} aria-label="Шаг назад">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -55,15 +96,23 @@ export default function Timeline({
         </button>
       </div>
       <div className="timeline-body">
-        <div className="spark">
-          {flags.map((ok, i) => (
-            <span
-              key={i}
-              className={ok ? "on" : "off"}
-              style={{ width: `${100 / Math.max(flags.length, 1)}%` }}
-            />
-          ))}
-        </div>
+        {multi && lanes ? (
+          <div className="spark-stack">
+            {lanes.map((lane) => (
+              <LaneSpark key={lane.id} lane={lane} bins={160} />
+            ))}
+          </div>
+        ) : (
+          <div className="spark">
+            {flags.map((ok, i) => (
+              <span
+                key={i}
+                className={sparkClass(ok, visFlags[i])}
+                style={{ width: `${100 / Math.max(flags.length, 1)}%` }}
+              />
+            ))}
+          </div>
+        )}
         <input
           type="range"
           min={0}
@@ -84,7 +133,7 @@ export default function Timeline({
       </label>
       <div className="clock">
         <strong>{formatClock(t)}</strong>
-        <span>{reachable ? "Связь есть" : "Перерыв"}</span>
+        <span>{multi ? `${lanes?.length ?? 0} клиентов` : status}</span>
       </div>
     </div>
   );

@@ -711,10 +711,41 @@ button.ghost:disabled {
   margin-bottom: 8px;
   overflow: hidden;
   border-radius: 999px;
+  flex: 1;
+  min-width: 0;
 }
 .spark span { display: block; height: 100%; }
 .spark .on { background: #30d158; }
-.spark .off { background: rgba(255, 69, 58, 0.55); }
+.spark .vis { background: rgba(255, 214, 10, 0.55); }
+.spark .off { background: rgba(255, 69, 58, 0.45); }
+.spark-stack {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+.spark-lane {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.spark-lane .spark {
+  margin-bottom: 0;
+  height: 4px;
+}
+.spark-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.timeline-multi {
+  align-items: end;
+}
+.sat.critical {
+  border-color: rgba(255, 107, 74, 0.55);
+}
+.sat.critical b { color: #ff8f75; }
+.globe-label-critical { color: #ff8f75; }
 .clock { display: grid; min-width: 88px; text-align: right; }
 .clock strong { font-size: 16px; letter-spacing: -0.04em; }
 .clock span { color: var(--muted); font-size: 11px; font-weight: 500; }
