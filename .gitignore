@@ -31,3 +31,8 @@ Thumbs.db
 backend/data/variants/
 backend/data/cache/
 *.log
+
+# Case extract dumps / pitch (local only)
+_docx.txt
+_pdf_*.txt
+outputs/
